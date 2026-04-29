@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>資産ダッシュボード</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0f14;
+  --surface: #151820;
+  --surface2: #1c2030;
+  --border: #252a3a;
+  --text: #e8eaf0;
+  --dim: #6b7280;
+  --muted: #3d4355;
+  --gold: #c9a84c;
+  --gold-bg: rgba(201,168,76,0.07);
+  --gold-dim: #7a6530;
+  --green: #4ade80;
+  --red: #f87171;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --cash-c: #c9a84c;
+  --stock-c: #60a5fa;
+  --trust-c: #a78bfa;
+  --total-c: #4ade80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 50% at 15% 10%,rgba(201,168,76,.05) 0,transparent 60%),radial-gradient(ellipse 60% 40% at 85% 90%,rgba(96,165,250,.04) 0,transparent 60%);pointer-events:none;z-index:0}
+
+.app{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:24px 20px 60px}
+
+/* header */
+header{display:flex;align-items:baseline;gap:12px;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+header h1{font-family:'Shippori Mincho',serif;font-size:21px;font-weight:600;color:var(--gold);letter-spacing:.06em}
+.hdr-sub{color:var(--dim);font-size:11px}
+.hdr-right{margin-left:auto;font-size:11px;color:var(--dim)}
+
+/* tabs */
+.tabs{display:flex;gap:2px;margin-bottom:22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px}
+.tab{flex:1;padding:8px;background:transparent;border:none;border-radius:5px;color:var(--dim);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;transition:all .2s}
+.tab.on{background:var(--surface2);color:var(--gold);border:1px solid var(--border)}
+.tab:hover:not(.on){color:var(--text)}
+
+.panel{display:none}.panel.on{display:block}
+
+/* kpi strip */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+@media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.tot::before{background:var(--total-c)}.kpi.csh::before{background:var(--cash-c)}
+.kpi.stk::before{background:var(--stock-c)}.kpi.trs::before{background:var(--trust-c)}
+.kpi-lbl{font-size:10px;color:var(--dim);margin-bottom:5px;letter-spacing:.08em;text-transform:uppercase}
+.kpi-val{font-size:19px;font-weight:500;letter-spacing:-.02em}
+.kpi.tot .kpi-val{color:var(--total-c)}.kpi.csh .kpi-val{color:var(--cash-c)}
+.kpi.stk .kpi-val{color:var(--stock-c)}.kpi.trs .kpi-val{color:var(--trust-c)}
+.kpi-d{font-size:10px;margin-top:3px}
+.kpi-d.up{color:var(--green)}.kpi-d.dn{color:var(--red)}.kpi-d.fl{color:var(--dim)}
+
+/* card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:18px}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card-title{font-family:'Shippori Mincho',serif;font-size:14px}
+.card-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* range buttons */
+.rng{padding:4px 9px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--dim);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s}
+.rng.on{border-color:var(--gold-dim);color:var(--gold);background:var(--gold-bg)}
+.rng:hover:not(.on){color:var(--text);border-color:var(--muted)}
+
+.chart-wrap{position:relative;height:250px}
+
+/* alloc bar */
+.alloc-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin:10px 0 7px}
+.alloc-seg{height:100%;transition:width .4s}
+.alloc-leg{display:flex;gap:14px;font-size:10px;color:var(--dim)}
+.alloc-leg span{display:flex;align-items:center;gap:4px}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+
+/* month grid */
+.month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:18px}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+.mc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.mc-ym{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--gold)}
+.mc-tot{font-size:10px;color:var(--dim)}
+.mc-row{display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:1px solid var(--border)}
+.mc-row:last-child{border:none;font-weight:500}
+.mc-lbl{color:var(--dim)}.mc-pos{color:var(--green)}.mc-neg{color:var(--red)}
+
+/* category breakdown */
+.cat-list{display:flex;flex-direction:column;gap:6px}
+.cat-row{display:grid;grid-template-columns:120px 1fr 70px;align-items:center;gap:10px;font-size:11px}
+.cat-bar-wrap{background:var(--border);border-radius:2px;height:4px;overflow:hidden}
+.cat-bar{height:100%;border-radius:2px;background:var(--red);transition:width .5s}
+.cat-bar.income{background:var(--green)}
+.cat-amt{text-align:right;color:var(--dim)}
+
+/* import panel */
+.import-section{margin-bottom:24px}
+.import-section h3{font-family:'Shippori Mincho',serif;font-size:14px;color:var(--gold);margin-bottom:4px}
+.import-desc{font-size:11px;color:var(--dim);margin-bottom:12px;line-height:1.6}
+.paste-area{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;resize:vertical;outline:none;transition:border-color .15s}
+.paste-area:focus{border-color:var(--gold-dim)}
+.paste-area::placeholder{color:var(--muted)}
+.btn-row{display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.btn-p{padding:10px 24px;background:var(--gold);border:none;border-radius:6px;color:#0d0f14;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;cursor:pointer;transition:opacity .15s}
+.btn-p:hover{opacity:.88}
+.btn-s{padding:10px 18px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;transition:all .15s}
+.btn-s:hover{border-color:var(--dim);color:var(--text)}
+.msg{font-size:11px;opacity:0;transition:opacity .3s}
+.msg.ok{color:var(--green)}.msg.err{color:var(--red)}
+.msg.vis{opacity:1}
+
+/* preview box */
+.preview{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:12px;font-size:11px;color:var(--dim);display:none}
+.preview.vis{display:block}
+.preview-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)}
+.preview-row:last-child{border:none;color:var(--text);font-weight:500}
+.preview-lbl{color:var(--dim)}.preview-val{color:var(--text)}
+
+/* history table */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead th{text-align:right;padding:7px 12px;color:var(--dim);border-bottom:1px solid var(--border);font-weight:400;letter-spacing:.04em;white-space:nowrap}
+thead th:first-child{text-align:left}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:var(--surface2)}
+tbody tr.latest{background:rgba(201,168,76,.04)}
+tbody td{padding:7px 12px;text-align:right;white-space:nowrap}
+tbody td:first-child{text-align:left;color:var(--dim)}
+.del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:3px;transition:color .15s}
+.del:hover{color:var(--red)}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;background:var(--surface2);color:var(--dim)}
+.badge.has{background:rgba(74,222,128,.1);color:var(--green)}
+
+/* two-col layout */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <h1>資産ダッシュボード</h1>
+  <span class="hdr-sub">週次 / 収支分析</span>
+  <div class="hdr-right" id="hdrDate"></div>
+</header>
+
+<div class="tabs">
+  <button class="tab on"  onclick="sw('overview',this)">概況</button>
+  <button class="tab"     onclick="sw('income',this)">収支</button>
+  <button class="tab"     onclick="sw('import',this)">取込</button>
+  <button class="tab"     onclick="sw('history',this)">履歴</button>
+</div>
+
+<!-- ===== OVERVIEW ===== -->
+<div class="panel on" id="panel-overview">
+  <div class="kpis" id="kpis"></div>
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">総資産推移</span>
+      <div class="card-actions">
+        <button class="rng" onclick="setR(13,'tot',this)">3M</button>
+        <button class="rng" onclick="setR(26,'tot',this)">6M</button>
+        <button class="rng on" onclick="setR(52,'tot',this)">1Y</button>
+        <button class="rng" onclick="setR(9999,'tot',this)">ALL</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="cTotal"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">資産内訳推移</span>
+      <div class="card-actions">
+        <button class="rng" onclick="setR(13,'stk',this)">3M</button>
+        <button class="rng" onclick="setR(26,'stk',this)">6M</button>
+        <button class="rng on" onclick="setR(52,'stk',this)">1Y</button>
+        <button class="rng" onclick="setR(9999,'stk',this)">ALL</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="cStack"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">現在の資産配分</span></div>
+    <div class="alloc-bar" id="allocBar"></div>
+    <div class="alloc-leg" id="allocLeg"></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">資産配分推移（割合）</span>
+      <div class="card-actions">
+        <button class="rng" onclick="setR(13,'alloc',this)">3M</button>
+        <button class="rng" onclick="setR(26,'alloc',this)">6M</button>
+        <button class="rng on" onclick="setR(52,'alloc',this)">1Y</button>
+        <button class="rng" onclick="setR(9999,'alloc',this)">ALL</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="cAlloc"></canvas></div>
+  </div>
+</div>
+
+<!-- ===== INCOME ===== -->
+<div class="panel" id="panel-income">
+  <div class="card">
+    <div class="card-head"><span class="card-title">月次収支サマリー</span></div>
+    <div class="chart-wrap"><canvas id="cIncome"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">支出カテゴリ別 月次推移</span>
+      <div class="card-actions">
+        <button class="rng on" onclick="setCatRange(6,this)">6M</button>
+        <button class="rng" onclick="setCatRange(12,this)">12M</button>
+      </div>
+    </div>
+    <div class="chart-wrap" style="height:280px"><canvas id="cCatTrend"></canvas></div>
+  </div>
+  <div class="two-col">
+    <div class="card" id="catExpCard">
+      <div class="card-head"><span class="card-title">支出カテゴリ内訳（直近月）</span></div>
+      <div class="cat-list" id="catExp"></div>
+    </div>
+    <div class="card" id="catIncCard">
+      <div class="card-head"><span class="card-title">収入内訳（直近月）</span></div>
+      <div class="cat-list" id="catInc"></div>
+    </div>
+  </div>
+  <div class="month-grid" id="monthGrid"></div>
+</div>
+
+<!-- ===== IMPORT ===== -->
+<div class="panel" id="panel-import">
+
+  <!-- 資産残高 -->
+  <div class="card">
+    <div class="import-section">
+      <h3>① 資産残高の取込（週次）</h3>
+      <div class="import-desc">
+        SSNBの「資産」ページ全体をコピーして貼り付けてください。<br>
+        現金・株式・投資信託の合計を自動で抽出します。<br>
+        <b style="color:var(--gold)">残高基準日</b>はこの断面での資産状況を記録する日付です。通常はSSNBで確認した当日を指定します。
+      </div>
+      <input type="date" id="assetDate" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:10px">
+      <textarea class="paste-area" id="assetPaste" placeholder="ここにSSNBの資産ページのテキストをペースト…"></textarea>
+      <div class="preview" id="assetPreview"></div>
+      <div class="btn-row">
+        <button class="btn-p" onclick="parseAsset()">内容を確認</button>
+        <button class="btn-p" id="assetSaveBtn" style="display:none" onclick="saveAsset()">保存する</button>
+        <button class="btn-s" onclick="document.getElementById('assetPaste').value='';document.getElementById('assetPreview').classList.remove('vis')">クリア</button>
+        <span class="msg" id="assetMsg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 収支明細 -->
+  <div class="card">
+    <div class="import-section">
+      <h3>② 収支明細の取込（翌月初）</h3>
+      <div class="import-desc">
+        SSNBの「収入・支出詳細」ページを月単位でコピーして貼り付けてください。<br>
+        <b style="color:var(--gold)">自動除外：</b>口座振替・振替（資金移動）・立替・お小遣い・SBI証券への入金
+      </div>
+      <input type="month" id="txMonth" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:10px">
+      <textarea class="paste-area" id="txPaste" placeholder="ここにSSNBの収入・支出詳細ページのテキストをペースト…" style="min-height:160px"></textarea>
+      <div class="preview" id="txPreview"></div>
+      <div class="btn-row">
+        <button class="btn-p" onclick="parseTx()">内容を確認</button>
+        <button class="btn-p" id="txSaveBtn" style="display:none" onclick="saveTx()">保存する</button>
+        <button class="btn-s" onclick="document.getElementById('txPaste').value='';document.getElementById('txPreview').classList.remove('vis')">クリア</button>
+        <span class="msg" id="txMsg"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div class="panel" id="panel-history">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">週次記録一覧</span>
+      <div class="card-actions">
+        <button class="btn-s" style="font-size:10px;padding:5px 12px" onclick="exportCSV()">CSV出力</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="text-align:left">日付</th>
+          <th>現金・暗号資産</th><th>株式</th><th>投資信託</th><th>合計</th>
+          <th>前週比</th><th>収支データ</th><th></th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ────────────────────────────────────────
+// STORAGE
+// ────────────────────────────────────────
+const KEY = 'assetdb_v3';
+
+// Seed data from Excel
+const SEED_ENTRIES = [{"date":"2024-11-09","cash":1482210,"stock":11064788,"trust":1493977,"total":14040975},{"date":"2024-11-16","cash":1468702,"stock":10827621,"trust":1527404,"total":13823727},{"date":"2024-11-23","cash":1454734,"stock":10534754,"trust":1515492,"total":13504980},{"date":"2024-11-30","cash":1872768,"stock":10206776,"trust":1489688,"total":13569232},{"date":"2024-12-07","cash":1246085,"stock":10964255,"trust":1558785,"total":13769125},{"date":"2024-12-14","cash":1285629,"stock":12835523,"trust":1612783,"total":15733935},{"date":"2024-12-21","cash":1278537,"stock":12890622,"trust":1626163,"total":15795322},{"date":"2024-12-28","cash":1921769,"stock":13705383,"trust":1686125,"total":17313277},{"date":"2025-01-04","cash":2101875,"stock":13299404,"trust":1669347,"total":17070626},{"date":"2025-01-11","cash":1593093,"stock":12856390,"trust":1681207,"total":16130690},{"date":"2025-01-18","cash":1592497,"stock":13284497,"trust":1651216,"total":16528210},{"date":"2025-01-25","cash":1591588,"stock":13602413,"trust":1735059,"total":16929060},{"date":"2025-02-01","cash":2028340,"stock":12147277,"trust":1701586,"total":15877203},{"date":"2025-02-08","cash":1882321,"stock":12329988,"trust":1709974,"total":15922283},{"date":"2025-02-15","cash":1471403,"stock":12843061,"trust":1745186,"total":16059650},{"date":"2025-02-22","cash":1510303,"stock":12108279,"trust":1682240,"total":15300822},{"date":"2025-03-01","cash":2218731,"stock":11335990,"trust":1579660,"total":15134381},{"date":"2025-03-08","cash":1991259,"stock":10996691,"trust":1535683,"total":14523633},{"date":"2025-03-15","cash":2110288,"stock":11033805,"trust":1484628,"total":14628721},{"date":"2025-03-22","cash":2108992,"stock":10958779,"trust":1540746,"total":14608517},{"date":"2025-03-29","cash":2004542,"stock":10884327,"trust":1599899,"total":14488768},{"date":"2025-04-05","cash":1274077,"stock":10157566,"trust":1528281,"total":12959924},{"date":"2025-04-12","cash":1242111,"stock":10405971,"trust":1338581,"total":12986663},{"date":"2025-04-19","cash":1242510,"stock":9680500,"trust":1399928,"total":12322938},{"date":"2025-04-26","cash":1241652,"stock":10482135,"trust":1447306,"total":13171093},{"date":"2025-05-03","cash":1887988,"stock":11443050,"trust":1583038,"total":14914076},{"date":"2025-05-10","cash":1896197,"stock":11687943,"trust":1627217,"total":15211357},{"date":"2025-05-17","cash":1881099,"stock":12477370,"trust":1729582,"total":16088051},{"date":"2025-05-24","cash":1554972,"stock":12586576,"trust":1729582,"total":15871130},{"date":"2025-05-31","cash":1848582,"stock":13205600,"trust":1738658,"total":16792840},{"date":"2025-06-07","cash":1389997,"stock":13438542,"trust":1799259,"total":16627798},{"date":"2025-06-14","cash":1420422,"stock":13437158,"trust":1821558,"total":16679138},{"date":"2025-06-21","cash":1578602,"stock":13661301,"trust":1670591,"total":16910494},{"date":"2025-06-28","cash":1192606,"stock":14724811,"trust":1716366,"total":17633783},{"date":"2025-07-05","cash":1094494,"stock":14946223,"trust":1742854,"total":17783571},{"date":"2025-07-12","cash":1097590,"stock":15085217,"trust":1817627,"total":18000434},{"date":"2025-07-19","cash":1106376,"stock":15663939,"trust":1863696,"total":18634011},{"date":"2025-07-26","cash":1122642,"stock":15859187,"trust":1873617,"total":18855446},{"date":"2025-08-02","cash":2617885,"stock":16145462,"trust":1934211,"total":20697558},{"date":"2025-08-09","cash":1875211,"stock":16546892,"trust":1915402,"total":20337505},{"date":"2025-08-16","cash":1870669,"stock":16588829,"trust":1959309,"total":20418807},{"date":"2025-08-23","cash":1860294,"stock":16286369,"trust":1936541,"total":20083204},{"date":"2025-08-30","cash":3034476,"stock":16203376,"trust":1983462,"total":21221314},{"date":"2025-09-06","cash":2490735,"stock":17746537,"trust":2005032,"total":22242304},{"date":"2025-09-13","cash":2485932,"stock":18676515,"trust":2063280,"total":23225727},{"date":"2025-09-20","cash":2481187,"stock":18172506,"trust":2110026,"total":22763719},{"date":"2025-09-27","cash":3049328,"stock":18024396,"trust":2124305,"total":23198029},{"date":"2025-10-04","cash":2542827,"stock":17930643,"trust":2148103,"total":22621573},{"date":"2025-10-11","cash":2562225,"stock":17903257,"trust":2270398,"total":22735880},{"date":"2025-10-18","cash":2540667,"stock":18713735,"trust":2195541,"total":23449943},{"date":"2025-10-25","cash":3143958,"stock":19389575,"trust":2271700,"total":24805233},{"date":"2025-11-01","cash":3028924,"stock":20184116,"trust":2361061,"total":25574101},{"date":"2025-11-08","cash":2494493,"stock":19145497,"trust":2313048,"total":23953038},{"date":"2025-11-15","cash":2478692,"stock":19159307,"trust":2340252,"total":23978251},{"date":"2025-11-22","cash":2467896,"stock":19742682,"trust":2302512,"total":24513090},{"date":"2025-11-29","cash":2942556,"stock":21883200,"trust":2391868,"total":27217624},{"date":"2025-12-06","cash":2260138,"stock":20726142,"trust":2404898,"total":25391178},{"date":"2025-12-13","cash":2327241,"stock":19989808,"trust":2457550,"total":24774599},{"date":"2025-12-20","cash":2318926,"stock":19316336,"trust":2406801,"total":24042063},{"date":"2025-12-27","cash":2299483,"stock":19820372,"trust":2494293,"total":24614148},{"date":"2026-01-03","cash":2259520,"stock":17760319,"trust":2493107,"total":22512946},{"date":"2026-01-10","cash":2226688,"stock":19396466,"trust":2544398,"total":24167552},{"date":"2026-01-17","cash":1832135,"stock":19638027,"trust":2582834,"total":24052996},{"date":"2026-01-24","cash":1908342,"stock":18547103,"trust":2577200,"total":23032645},{"date":"2026-01-31","cash":1388003,"stock":18711236,"trust":2551179,"total":22650418},{"date":"2026-02-07","cash":1305469,"stock":19048645,"trust":1956898,"total":22311012},{"date":"2026-02-14","cash":1362556,"stock":18433411,"trust":1967755,"total":21763722},{"date":"2026-02-21","cash":1804985,"stock":18863838,"trust":2004219,"total":22673042},{"date":"2026-02-28","cash":2402276,"stock":18450867,"trust":2050587,"total":22903730},{"date":"2026-03-07","cash":2170067,"stock":19025396,"trust":2044890,"total":23240353},{"date":"2026-03-14","cash":2064987,"stock":19215244,"trust":2097874,"total":23378105},{"date":"2026-03-21","cash":2012191,"stock":18797409,"trust":2086952,"total":22896552},{"date":"2026-03-28","cash":2428114,"stock":17931943,"trust":2029118,"total":22389175},{"date":"2026-04-04","cash":1736179,"stock":18487600,"trust":2078175,"total":22301954},{"date":"2026-04-11","cash":1687112,"stock":20603437,"trust":2202055,"total":24492604},{"date":"2026-04-18","cash":1731039,"stock":22219534,"trust":2315455,"total":26266028},{"date":"2026-04-25","cash":2384221,"stock":22709892,"trust":2356840,"total":27450953}];
+
+function load() {
+  try { const r = localStorage.getItem(KEY); if (r) return JSON.parse(r); } catch(e){}
+  const d = { entries: SEED_ENTRIES.map(e=>({...e})), txByMonth: {} };
+  save(d); return d;
+}
+function save(d) { localStorage.setItem(KEY, JSON.stringify(d)); }
+let DB = load();
+
+function entries() { return [...DB.entries].sort((a,b)=>a.date.localeCompare(b.date)); }
+
+// ────────────────────────────────────────
+// UTILS
+// ────────────────────────────────────────
+const fmtM = n => {
+  if (n==null) return '—';
+  const s = Math.abs(n);
+  const str = s>=1e8?(s/1e8).toFixed(2)+'億':s>=1e4?(s/1e4).toFixed(0)+'万':s.toLocaleString();
+  return (n<0?'▲':'')+str;
+};
+const fmtY = n => n==null?'—':(n<0?'▲':n>0?'+':'')+Math.abs(n).toLocaleString()+'円';
+const fmtDate = s => s ? s.slice(2).replace(/-/g,'/') : '—';
+const fmtYM = s => s ? s.slice(2).replace('-','/') : '—';
+
+function showMsg(id, text, type, dur=2800) {
+  const el = document.getElementById(id);
+  el.textContent = text; el.className = 'msg '+type+' vis';
+  setTimeout(()=>el.classList.remove('vis'), dur);
+}
+
+// ────────────────────────────────────────
+// TABS
+// ────────────────────────────────────────
+function sw(name, btn) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('panel-'+name).classList.add('on');
+  btn.classList.add('on');
+  if(name==='overview') renderOverview();
+  if(name==='income') renderIncome();
+  if(name==='history') renderHistory();
+  if(name==='import') initImportDates();
+}
+
+// ────────────────────────────────────────
+// CHART HELPERS
+// ────────────────────────────────────────
+let charts = {};
+const CTICK = { color:'#6b7280', font:{family:'DM Mono',size:10} };
+const CGRID = { color:'#252a3a' };
+const CTOOLTIP = {
+  backgroundColor:'#1c2030', borderColor:'#252a3a', borderWidth:1,
+  titleColor:'#c9a84c', bodyColor:'#e8eaf0', padding:10
+};
+function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+function yFmt(v) { return v>=1e8?(v/1e8).toFixed(0)+'億':v>=1e4?(v/1e4).toFixed(0)+'万':v; }
+
+let rTot=52, rStk=52, rAlloc=52;
+function setR(n, which, btn) {
+  if(which==='tot')   { rTot=n;   renderTotalChart(); }
+  if(which==='stk')   { rStk=n;   renderStackChart(); }
+  if(which==='alloc') { rAlloc=n; renderAllocTrend(); }
+  btn.closest('.card-actions').querySelectorAll('.rng').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// ────────────────────────────────────────
+// OVERVIEW
+// ────────────────────────────────────────
+function renderOverview() {
+  const es = entries();
+  if(!es.length) return;
+  const cur = es[es.length-1], prev = es.length>1?es[es.length-2]:null;
+  document.getElementById('hdrDate').textContent = '最終更新: '+fmtDate(cur.date);
+
+  const defs=[{k:'total',l:'総資産',c:'tot'},{k:'cash',l:'現金・暗号資産',c:'csh'},{k:'stock',l:'株式',c:'stk'},{k:'trust',l:'投資信託',c:'trs'}];
+  document.getElementById('kpis').innerHTML = defs.map(d=>{
+    const v=cur[d.k], p=prev?prev[d.k]:null;
+    const delta=p?v-p:null, pct=p?(v-p)/p:null;
+    const cls=delta==null?'fl':delta>=0?'up':'dn';
+    const sign=delta>=0?'+':'';
+    return `<div class="kpi ${d.c}">
+      <div class="kpi-lbl">${d.l}</div>
+      <div class="kpi-val">${fmtM(v)}</div>
+      ${delta!=null?`<div class="kpi-d ${cls}">${sign}${fmtM(delta)} (${sign}${(pct*100).toFixed(1)}%)</div>`:'<div class="kpi-d fl">—</div>'}
+    </div>`;
+  }).join('');
+
+  renderTotalChart(); renderStackChart(); renderAlloc(cur); renderAllocTrend();
+}
+
+function renderAllocTrend() {
+  const es = entries().slice(-rAlloc);
+  destroyChart('alloc');
+  const ctx = document.getElementById('cAlloc').getContext('2d');
+  charts['alloc'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: es.map(e=>fmtDate(e.date)),
+      datasets: [
+        { label:'現金・暗号資産', data: es.map(e=>+(e.cash/e.total*100).toFixed(2)),
+          borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,.12)',
+          borderWidth:2, fill:true, tension:.3,
+          pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
+        { label:'株式（現物）', data: es.map(e=>+(e.stock/e.total*100).toFixed(2)),
+          borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.12)',
+          borderWidth:2, fill:true, tension:.3,
+          pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
+        { label:'投資信託', data: es.map(e=>+(e.trust/e.total*100).toFixed(2)),
+          borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.12)',
+          borderWidth:2, fill:true, tension:.3,
+          pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ display:true, position:'bottom',
+          labels:{ color:'#6b7280', font:{family:'DM Mono',size:10}, boxWidth:10, padding:14 }
+        },
+        tooltip:{ ...CTOOLTIP,
+          callbacks:{ label: c=>' '+c.dataset.label+': '+c.parsed.y.toFixed(1)+'%' }
+        }
+      },
+      scales: {
+        x:{ grid:CGRID, ticks:{...CTICK, maxTicksLimit:10} },
+        y:{ grid:CGRID, min:0, max:100,
+          ticks:{...CTICK, callback:v=>v+'%'}
+        }
+      }
+    }
+  });
+}
+
+function renderTotalChart() {
+  const es = entries().slice(-rTot);
+  destroyChart('tot');
+  const ctx = document.getElementById('cTotal').getContext('2d');
+  const g = ctx.createLinearGradient(0,0,0,250);
+  g.addColorStop(0,'rgba(74,222,128,.18)'); g.addColorStop(1,'rgba(74,222,128,0)');
+  charts['tot'] = new Chart(ctx,{type:'line',data:{
+    labels:es.map(e=>fmtDate(e.date)),
+    datasets:[{data:es.map(e=>e.total),borderColor:'#4ade80',borderWidth:2,backgroundColor:g,fill:true,tension:.3,
+      pointRadius:es.length>30?0:3,pointHoverRadius:5,pointBackgroundColor:'#4ade80'}]
+  },options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{...CTOOLTIP,callbacks:{label:c=>' '+c.parsed.y.toLocaleString('ja-JP')+'円'}}},
+    scales:{x:{grid:CGRID,ticks:{...CTICK,maxTicksLimit:10}},y:{grid:CGRID,ticks:{...CTICK,callback:yFmt}}}
+  }});
+}
+
+function renderStackChart() {
+  const es = entries().slice(-rStk);
+  destroyChart('stk');
+  const ctx = document.getElementById('cStack').getContext('2d');
+  charts['stk'] = new Chart(ctx,{type:'bar',data:{
+    labels:es.map(e=>fmtDate(e.date)),
+    datasets:[
+      {label:'現金・暗号資産',data:es.map(e=>e.cash), backgroundColor:'rgba(201,168,76,.72)',stack:'s'},
+      {label:'株式（現物）',  data:es.map(e=>e.stock),backgroundColor:'rgba(96,165,250,.72)',stack:'s'},
+      {label:'投資信託',      data:es.map(e=>e.trust),backgroundColor:'rgba(167,139,250,.72)',stack:'s'},
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:'DM Mono',size:10},boxWidth:10,padding:14}},
+      tooltip:{...CTOOLTIP,callbacks:{label:c=>' '+c.dataset.label+': '+c.parsed.y.toLocaleString('ja-JP')+'円'}}},
+    scales:{x:{grid:CGRID,ticks:{...CTICK,maxTicksLimit:10}},y:{grid:CGRID,ticks:{...CTICK,callback:yFmt}}}
+  }});
+}
+
+function renderAlloc(cur) {
+  const t=cur.total;
+  const segs=[{v:cur.cash,c:'#c9a84c',l:'現金'},{v:cur.stock,c:'#60a5fa',l:'株式'},{v:cur.trust,c:'#a78bfa',l:'投信'}];
+  document.getElementById('allocBar').innerHTML = segs.map(s=>`<div class="alloc-seg" style="width:${(s.v/t*100).toFixed(2)}%;background:${s.c}"></div>`).join('');
+  document.getElementById('allocLeg').innerHTML = segs.map(s=>`<span><span class="dot" style="background:${s.c}"></span>${s.l} ${(s.v/t*100).toFixed(1)}%</span>`).join('');
+}
+
+// ────────────────────────────────────────
+// INCOME
+// ────────────────────────────────────────
+function getMonthly() {
+  const es = entries();
+  const byYm = {};
+  es.forEach((e,i)=>{
+    const ym=e.date.slice(0,7);
+    if(!byYm[ym]) byYm[ym]={entries:[],txData:DB.txByMonth[ym]||null};
+    byYm[ym].entries.push({...e,idx:i});
+  });
+  return Object.entries(byYm).sort((a,b)=>a[0].localeCompare(b[0])).map(([ym,m])=>{
+    const first=m.entries[0], last=m.entries[m.entries.length-1];
+    const prevIdx=first.idx-1;
+    const prevEntry = prevIdx>=0?es[prevIdx]:null;
+    const startTotal=prevEntry?prevEntry.total:first.total;
+    const endTotal=last.total;
+    const assetDelta=endTotal-startTotal;
+    const tx=m.txData;
+    return {ym,endTotal,assetDelta,tx};
+  });
+}
+
+function renderIncome() {
+  const months = getMonthly().slice(-12);
+  destroyChart('inc');
+  const ctx = document.getElementById('cIncome').getContext('2d');
+  charts['inc'] = new Chart(ctx,{type:'bar',data:{
+    labels:months.map(m=>fmtYM(m.ym)),
+    datasets:[
+      {label:'給与・収入',  data:months.map(m=>m.tx?m.tx.totalIncome:0),  backgroundColor:'rgba(74,222,128,.7)'},
+      {label:'支出合計',    data:months.map(m=>m.tx?-m.tx.totalExpense:0), backgroundColor:'rgba(248,113,113,.7)'},
+      {label:'資産増加',    data:months.map(m=>m.assetDelta), backgroundColor:months.map(m=>m.assetDelta>=0?'rgba(201,168,76,.55)':'rgba(248,113,113,.3)')},
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:'DM Mono',size:10},boxWidth:10,padding:14}},
+      tooltip:{...CTOOLTIP,callbacks:{label:c=>' '+c.dataset.label+': '+Math.abs(c.parsed.y).toLocaleString('ja-JP')+'円'}}},
+    scales:{x:{grid:CGRID,ticks:{...CTICK,maxTicksLimit:12}},y:{grid:CGRID,ticks:{...CTICK,callback:v=>yFmt(Math.abs(v))}}}
+  }});
+
+  // latest month with tx data
+  const withTx = [...getMonthly()].reverse().find(m=>m.tx);
+  if (withTx?.tx) {
+    renderCatBreakdown(withTx.ym, withTx.tx);
+  } else {
+    document.getElementById('catExp').innerHTML = '<div style="color:var(--dim);font-size:11px;padding:8px">収支データを取込むとカテゴリ内訳が表示されます</div>';
+    document.getElementById('catInc').innerHTML = '';
+  }
+  renderCatTrend();
+
+  // month cards
+  document.getElementById('monthGrid').innerHTML = [...getMonthly()].reverse().slice(0,12).map(m=>{
+    const tx=m.tx;
+    const dCls=m.assetDelta>=0?'mc-pos':'mc-neg';
+    return `<div class="mc">
+      <div class="mc-head"><span class="mc-ym">${fmtYM(m.ym)}</span><span class="mc-tot">${fmtM(m.endTotal)}</span></div>
+      ${tx?`
+        <div class="mc-row"><span class="mc-lbl">給与</span><span class="mc-pos">+${tx.salary.toLocaleString()}円</span></div>
+        ${tx.dividend?`<div class="mc-row"><span class="mc-lbl">配当等</span><span class="mc-pos">+${tx.dividend.toLocaleString()}円</span></div>`:''}
+        <div class="mc-row"><span class="mc-lbl">支出合計</span><span class="mc-neg">▲${tx.totalExpense.toLocaleString()}円</span></div>
+        <div class="mc-row"><span class="mc-lbl">収支</span><span class="${tx.balance>=0?'mc-pos':'mc-neg'}">${tx.balance>=0?'+':'▲'}${Math.abs(tx.balance).toLocaleString()}円</span></div>
+      `:`<div class="mc-row"><span class="mc-lbl">資産増加</span><span class="${dCls}">${m.assetDelta>=0?'+':'▲'}${Math.abs(m.assetDelta).toLocaleString()}円</span></div>`}
+    </div>`;
+  }).join('');
+}
+
+function renderCatBreakdown(ym, tx) {
+  // expense categories
+  const expCats = Object.entries(tx.byCategory||{})
+    .filter(([,v])=>v<0).map(([k,v])=>({k,v:Math.abs(v)}))
+    .sort((a,b)=>b.v-a.v).slice(0,8);
+  const maxExp = expCats[0]?.v||1;
+  document.getElementById('catExp').innerHTML = expCats.length?expCats.map(({k,v})=>`
+    <div class="cat-row">
+      <span style="color:var(--dim)">${k}</span>
+      <div class="cat-bar-wrap"><div class="cat-bar" style="width:${(v/maxExp*100).toFixed(1)}%"></div></div>
+      <span class="cat-amt">▲${v.toLocaleString()}</span>
+    </div>`).join(''):'<div style="color:var(--dim);font-size:11px;padding:4px">データなし</div>';
+
+  // income categories
+  const incCats = Object.entries(tx.byCategory||{})
+    .filter(([,v])=>v>0).map(([k,v])=>({k,v}))
+    .sort((a,b)=>b.v-a.v);
+  const maxInc = incCats[0]?.v||1;
+  document.getElementById('catInc').innerHTML = incCats.length?incCats.map(({k,v})=>`
+    <div class="cat-row">
+      <span style="color:var(--dim)">${k}</span>
+      <div class="cat-bar-wrap"><div class="cat-bar income" style="width:${(v/maxInc*100).toFixed(1)}%"></div></div>
+      <span class="cat-amt" style="color:var(--green)">+${v.toLocaleString()}</span>
+    </div>`).join(''):'';
+}
+
+const CAT_COLORS = [
+  '#f87171','#fb923c','#fbbf24','#86efac','#34d399',
+  '#22d3ee','#60a5fa','#a78bfa','#f472b6','#94a3b8'
+];
+
+let catRange = 6;
+function setCatRange(n, btn) {
+  catRange = n;
+  btn.closest('.card-actions').querySelectorAll('.rng').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderCatTrend();
+}
+
+function renderCatTrend() {
+  const allMonths = getMonthly().filter(m=>m.tx);
+  const months = allMonths.slice(-catRange);
+  if (!months.length) {
+    document.getElementById('cCatTrend').getContext('2d').clearRect(0,0,9999,9999);
+    return;
+  }
+
+  // Collect expense categories and sort by total across all months
+  const catTotals = {};
+  months.forEach(m=>{
+    Object.entries(m.tx.byCategory||{}).forEach(([k,v])=>{
+      if (v<0) catTotals[k]=(catTotals[k]||0)+Math.abs(v);
+    });
+  });
+  const topCats = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k])=>k);
+
+  const datasets = topCats.map((cat,i)=>({
+    label: cat,
+    data: months.map(m=>Math.abs(m.tx.byCategory?.[cat]||0)),
+    backgroundColor: CAT_COLORS[i%CAT_COLORS.length]+'bb',
+    borderColor: CAT_COLORS[i%CAT_COLORS.length],
+    borderWidth: 1,
+    stack: 's'
+  }));
+
+  destroyChart('catTrend');
+  const ctx = document.getElementById('cCatTrend').getContext('2d');
+  charts['catTrend'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: months.map(m=>fmtYM(m.ym)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom',
+          labels: { color:'#6b7280', font:{family:'DM Mono',size:10}, boxWidth:10, padding:12 }
+        },
+        tooltip: { ...CTOOLTIP,
+          callbacks: { label: c=>' '+c.dataset.label+': ▲'+c.parsed.y.toLocaleString('ja-JP')+'円' }
+        }
+      },
+      scales: {
+        x: { grid:CGRID, ticks:{...CTICK,maxTicksLimit:12} },
+        y: { grid:CGRID, ticks:{...CTICK, callback:yFmt} }
+      }
+    }
+  });
+}
+
+// ────────────────────────────────────────
+// IMPORT - ASSET
+// ────────────────────────────────────────
+let parsedAsset = null;
+
+function initImportDates() {
+  if (!document.getElementById('assetDate').value) {
+    document.getElementById('assetDate').value = new Date().toISOString().slice(0,10);
+  }
+  if (!document.getElementById('txMonth').value) {
+    const d = new Date(); d.setMonth(d.getMonth()-1);
+    document.getElementById('txMonth').value = d.toISOString().slice(0,7);
+  }
+}
+
+function parseAsset() {
+  const text = document.getElementById('assetPaste').value.trim();
+  if (!text) { showMsg('assetMsg','テキストを貼り付けてください','err'); return; }
+
+  // Extract section totals: look for "合計：N円" pattern
+  const totals = {};
+  const sections = ['預金・現金・暗号資産','株式（現物）','投資信託'];
+  const sectionKeys = ['cash','stock','trust'];
+
+  // Try to find totals by section headers
+  const lines = text.split('\n');
+  let curSection = null;
+  for (const line of lines) {
+    const l = line.trim();
+    if (l.includes('預金・現金・暗号資産') || l.includes('現金・暗号資産')) curSection='cash';
+    else if (l.includes('株式（現物）') || l.includes('株式(現物)')) curSection='stock';
+    else if (l.includes('投資信託')) curSection='trust';
+
+    const m = l.match(/合計[：:]\s*([\d,]+)円/);
+    if (m && curSection && !totals[curSection]) {
+      totals[curSection] = parseInt(m[1].replace(/,/g,''));
+    }
+  }
+
+  // Fallback: grab all "合計：N円" in order
+  if (Object.keys(totals).length < 3) {
+    const all = [...text.matchAll(/合計[：:]\s*([\d,]+)円/g)];
+    if (all.length >= 3) {
+      totals.cash  = parseInt(all[0][1].replace(/,/g,''));
+      totals.stock = parseInt(all[1][1].replace(/,/g,''));
+      totals.trust = parseInt(all[2][1].replace(/,/g,''));
+    } else if (all.length === 1) {
+      // only one total found — show error
+      showMsg('assetMsg','合計が3つ見つかりません。資産ページ全体をコピーしてください','err'); return;
+    }
+  }
+
+  if (!totals.cash && !totals.stock && !totals.trust) {
+    showMsg('assetMsg','合計金額が見つかりません。ページのコピーを確認してください','err'); return;
+  }
+
+  const date = document.getElementById('assetDate').value;
+  const total = (totals.cash||0) + (totals.stock||0) + (totals.trust||0);
+  parsedAsset = { date, cash:totals.cash||0, stock:totals.stock||0, trust:totals.trust||0, total };
+
+  const p = document.getElementById('assetPreview');
+  p.innerHTML = `
+    <div class="preview-row"><span class="preview-lbl">残高基準日</span><span class="preview-val">${fmtDate(date)}</span></div>
+    <div class="preview-row"><span class="preview-lbl">現金・暗号資産</span><span class="preview-val">${(totals.cash||0).toLocaleString()}円</span></div>
+    <div class="preview-row"><span class="preview-lbl">株式（現物）</span><span class="preview-val">${(totals.stock||0).toLocaleString()}円</span></div>
+    <div class="preview-row"><span class="preview-lbl">投資信託</span><span class="preview-val">${(totals.trust||0).toLocaleString()}円</span></div>
+    <div class="preview-row"><span class="preview-lbl">合計</span><span class="preview-val" style="color:var(--total-c);font-weight:500">${total.toLocaleString()}円</span></div>`;
+  p.classList.add('vis');
+  document.getElementById('assetSaveBtn').style.display='inline-block';
+}
+
+function saveAsset() {
+  if (!parsedAsset) return;
+  const idx = DB.entries.findIndex(e=>e.date===parsedAsset.date);
+  if (idx>=0) DB.entries[idx]={...DB.entries[idx],...parsedAsset};
+  else DB.entries.push(parsedAsset);
+  save(DB);
+  renderOverview();
+  showMsg('assetMsg','✓ 保存しました','ok');
+  document.getElementById('assetSaveBtn').style.display='none';
+  parsedAsset=null;
+}
+
+// ────────────────────────────────────────
+// IMPORT - TRANSACTIONS
+// ────────────────────────────────────────
+let parsedTx = null;
+
+// Categories to EXCLUDE (internal transfers / not real spending)
+const EXCLUDE_CATEGORIES = ['立替','お小遣い','事業投資'];
+
+// Exclude only true internal transfers, NOT credit card payments
+// "口座振替 イオンフィナンシャルサービス" = CC payment → should be EXCLUDED
+// because the actual spending is already captured in each card transaction.
+// SBI証券への「振替」= investment deposit → EXCLUDE
+// 口座間の「振替」(振替) tag = internal move → EXCLUDE
+function isExcluded(row) {
+  // Category-based exclusion
+  if (EXCLUDE_CATEGORIES.some(c => row.category?.includes(c) || row.subcat?.includes(c))) return true;
+  // Marked as internal transfer by (振替) tag in institution column
+  if (row.isTransfer) return true;
+  // SBI証券への入金（事業投資カテゴリで処理済みだが念のため）
+  if (row.desc?.includes('振替 SBI証券')) return true;
+  // 口座間の資金移動キーワード（金融機関名のみの行）
+  if (['SBIハイブリッド預金','代表口座','自宅修繕','ことら送金'].some(k => row.desc?.includes(k))) return true;
+  // クレカ引落は「口座振替 ○○カード」形式 → これは除外（カード明細側で計上）
+  if (row.desc?.match(/口座振替\s.+カード/) || row.desc?.match(/口座振替\s.+サービス/)) return true;
+  return false;
+}
+
+function parseTx() {
+  const text = document.getElementById('txPaste').value.trim();
+  const ym   = document.getElementById('txMonth').value;
+  if (!text || !ym) { showMsg('txMsg','テキストと対象月を入力してください','err'); return; }
+
+  const rows = [];
+  const lines = text.split('\n');
+
+  // Pattern: "MM/DD(曜)  内容  金額  金融機関  大項目  中項目"
+  // We look for lines containing a date like 03/25 and a number with sign
+  for (let i=0; i<lines.length; i++) {
+    const l = lines[i].trim();
+    // Match date prefix
+    const dateM = l.match(/^(\d{2})\/(\d{2})[（(].[）)]/);
+    if (!dateM) continue;
+    const month = dateM[1], day = dateM[2];
+    const date  = `${ym}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`.slice(0,10);
+    // Grab rest of line or next few lines collapsed
+    const combined = [l, lines[i+1]||'', lines[i+2]||'', lines[i+3]||''].join('\t');
+    // Amount: look for standalone integer with optional minus and commas
+    const amtM = combined.match(/([-−])?\s*([\d,]+)\s*(?:円|\t)/);
+    if (!amtM) continue;
+    const neg = amtM[1]?true:false;
+    const amt = parseInt(amtM[2].replace(/,/g,'')) * (neg?-1:1);
+
+    // Try to extract description and category
+    // Columns are tab/whitespace separated: date desc amount institution cat subcat
+    const parts = combined.split(/\t+/).map(s=>s.trim()).filter(Boolean);
+    const desc = parts[1]||'';
+    // Find category columns (typically after institution name)
+    const cat  = parts[4]||'';
+    const subc = parts[5]||'';
+
+    // Detect (振替) tagged rows = internal account transfers
+    const isTransfer = combined.includes('(振替)') || combined.includes('（振替）');
+    rows.push({ date, desc, amount:amt, category:cat, subcat:subc, isTransfer });
+  }
+
+  if (!rows.length) { showMsg('txMsg','明細が見つかりません。収入・支出詳細ページ全体をコピーしてください','err'); return; }
+
+  // Filter
+  const included = rows.filter(r=>!isExcluded(r));
+  const excluded  = rows.filter(r=>isExcluded(r));
+
+  // Aggregate
+  let totalIncome=0, totalExpense=0, salary=0, dividend=0;
+  const byCategory = {};
+
+  included.forEach(r=>{
+    const a = r.amount;
+    const cat = r.category||'その他';
+    byCategory[cat] = (byCategory[cat]||0) + a;
+    if (a>0) {
+      totalIncome += a;
+      if (cat.includes('給与')||r.subcat?.includes('給与')) salary+=a;
+      else if (cat.includes('配当')||r.subcat?.includes('配当')) dividend+=a;
+    } else {
+      totalExpense += Math.abs(a);
+    }
+  });
+
+  const balance = totalIncome - totalExpense;
+
+  parsedTx = { ym, totalIncome, totalExpense, salary, dividend, balance, byCategory, rowCount:included.length, excludedCount:excluded.length };
+
+  // Preview
+  const topExp = Object.entries(byCategory).filter(([,v])=>v<0).sort((a,b)=>a[1]-b[1]).slice(0,5);
+  const p = document.getElementById('txPreview');
+  p.innerHTML = `
+    <div class="preview-row"><span class="preview-lbl">対象月</span><span class="preview-val">${ym}</span></div>
+    <div class="preview-row"><span class="preview-lbl">取込明細数</span><span class="preview-val">${included.length}件（除外: ${excluded.length}件）</span></div>
+    <div class="preview-row"><span class="preview-lbl">収入合計</span><span class="preview-val" style="color:var(--green)">+${totalIncome.toLocaleString()}円</span></div>
+    <div class="preview-row"><span class="preview-lbl">　うち給与</span><span class="preview-val">${salary.toLocaleString()}円</span></div>
+    <div class="preview-row"><span class="preview-lbl">支出合計</span><span class="preview-val" style="color:var(--red)">▲${totalExpense.toLocaleString()}円</span></div>
+    ${topExp.map(([k,v])=>`<div class="preview-row"><span class="preview-lbl" style="padding-left:8px">　${k}</span><span class="preview-val">▲${Math.abs(v).toLocaleString()}円</span></div>`).join('')}
+    <div class="preview-row"><span class="preview-lbl">収支</span><span class="preview-val" style="color:${balance>=0?'var(--green)':'var(--red)'};">${balance>=0?'+':'▲'}${Math.abs(balance).toLocaleString()}円</span></div>`;
+  p.classList.add('vis');
+  document.getElementById('txSaveBtn').style.display='inline-block';
+}
+
+function saveTx() {
+  if (!parsedTx) return;
+  if (!DB.txByMonth) DB.txByMonth={};
+  DB.txByMonth[parsedTx.ym] = parsedTx;
+  save(DB);
+  showMsg('txMsg','✓ 保存しました','ok');
+  document.getElementById('txSaveBtn').style.display='none';
+  parsedTx=null;
+}
+
+// ────────────────────────────────────────
+// HISTORY
+// ────────────────────────────────────────
+function renderHistory() {
+  const es = entries().reverse();
+  document.getElementById('histBody').innerHTML = es.map((e,i)=>{
+    const prev=es[i+1];
+    const delta=prev?e.total-prev.total:null;
+    const dCls=delta==null?'':delta>=0?'color:var(--green)':'color:var(--red)';
+    const hasTx=!!DB.txByMonth?.[e.date.slice(0,7)];
+    return `<tr class="${i===0?'latest':''}">
+      <td>${fmtDate(e.date)}</td>
+      <td>${e.cash.toLocaleString()}</td>
+      <td>${e.stock.toLocaleString()}</td>
+      <td>${e.trust.toLocaleString()}</td>
+      <td style="color:var(--green);font-weight:500">${e.total.toLocaleString()}</td>
+      <td style="${dCls}">${delta==null?'—':(delta>=0?'+':'▲')+Math.abs(delta).toLocaleString()}</td>
+      <td><span class="badge ${hasTx?'has':''}">${hasTx?'収支あり':'—'}</span></td>
+      <td><button class="del" onclick="delEntry('${e.date}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function delEntry(date) {
+  if (!confirm(date+' のデータを削除しますか？')) return;
+  DB.entries = DB.entries.filter(e=>e.date!==date);
+  save(DB); renderHistory(); renderOverview();
+}
+
+function exportCSV() {
+  const es = entries();
+  const hdr = '日付,現金・暗号資産,株式,投資信託,合計,給与,支出合計,収支\n';
+  const rows = es.map(e=>{
+    const tx=DB.txByMonth?.[e.date.slice(0,7)];
+    return `${e.date},${e.cash},${e.stock},${e.trust},${e.total},${tx?tx.salary:''},{${tx?tx.totalExpense:''}},${tx?tx.balance:''}`;
+  }).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+hdr+rows],{type:'text/csv'}));
+  a.download='資産推移_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+// ────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────
+renderOverview();
+</script>
+</body>
+</html>
