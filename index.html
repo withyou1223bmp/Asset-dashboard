@@ -565,11 +565,16 @@ function initSettings() {
 // CHART HELPERS
 // ────────────────────────────────────────
 let charts = {};
-const CTICK = { color:'#6b7280', font:{family:'DM Mono',size:10} };
+// 日本語フォントをChart.jsのグローバルデフォルトに設定
+Chart.defaults.font.family = "'DM Mono', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif";
+Chart.defaults.font.size = 10;
+const CTICK = { color:'#6b7280', font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif", size:10} };
 const CGRID = { color:'#252a3a' };
 const CTOOLTIP = {
   backgroundColor:'#1c2030', borderColor:'#252a3a', borderWidth:1,
-  titleColor:'#c9a84c', bodyColor:'#e8eaf0', padding:10
+  titleColor:'#c9a84c', bodyColor:'#e8eaf0', padding:10,
+  titleFont:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif"},
+  bodyFont:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif"}
 };
 function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
 function yFmt(v) { return v>=1e8?(v/1e8).toFixed(0)+'億':v>=1e4?(v/1e4).toFixed(0)+'万':v; }
@@ -657,7 +662,7 @@ function renderGainChart() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:'DM Mono',size:10},boxWidth:10,padding:12}},
+        legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif",size:10},boxWidth:10,padding:12}},
         tooltip:{...CTOOLTIP,callbacks:{label:c=>' '+c.dataset.label+': '+c.parsed.y.toLocaleString('ja-JP')+'円'}}
       },
       scales:{
@@ -739,7 +744,7 @@ function renderStackChart() {
       {label:'投資信託',      data:es.map(e=>e.trust),backgroundColor:'rgba(167,139,250,.72)',stack:'s'},
     ]
   },options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:'DM Mono',size:10},boxWidth:10,padding:14}},
+    plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif",size:10},boxWidth:10,padding:14}},
       tooltip:{...CTOOLTIP,callbacks:{label:c=>' '+c.dataset.label+': '+c.parsed.y.toLocaleString('ja-JP')+'円'}}},
     scales:{x:{grid:CGRID,ticks:{...CTICK,maxTicksLimit:10}},y:{grid:CGRID,ticks:{...CTICK,callback:yFmt}}}
   }});
@@ -787,7 +792,7 @@ function renderIncome() {
       {label:'資産増加',    data:months.map(m=>m.assetDelta), backgroundColor:months.map(m=>m.assetDelta>=0?'rgba(201,168,76,.55)':'rgba(248,113,113,.3)')},
     ]
   },options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:'DM Mono',size:10},boxWidth:10,padding:14}},
+    plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif",size:10},boxWidth:10,padding:14}},
       tooltip:{...CTOOLTIP,callbacks:{label:c=>' '+c.dataset.label+': '+Math.abs(c.parsed.y).toLocaleString('ja-JP')+'円'}}},
     scales:{x:{grid:CGRID,ticks:{...CTICK,maxTicksLimit:12}},y:{grid:CGRID,ticks:{...CTICK,callback:v=>yFmt(Math.abs(v))}}}
   }});
