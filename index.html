@@ -654,9 +654,9 @@ function renderGainChart() {
       datasets: [
         { label:'株式元本', data:es.map(e=>e.stockCost||0), backgroundColor:'rgba(96,165,250,.55)', stack:'s' },
         { label:'投信元本', data:es.map(e=>e.trustCost||0), backgroundColor:'rgba(167,139,250,.55)', stack:'s' },
-        { label:'含み益（株式）', data:es.map(e=>e.stockGain||0),
+        { label:'含益(株)', data:es.map(e=>e.stockGain||0),
           backgroundColor:es.map(e=>(e.stockGain||0)>=0?'rgba(74,222,128,.75)':'rgba(248,113,113,.75)'), stack:'s' },
-        { label:'含み益（投信）', data:es.map(e=>e.trustGain||0),
+        { label:'含益(投信)', data:es.map(e=>e.trustGain||0),
           backgroundColor:es.map(e=>(e.trustGain||0)>=0?'rgba(74,222,128,.5)':'rgba(248,113,113,.5)'), stack:'s' },
       ]
     },
@@ -683,15 +683,15 @@ function renderAllocTrend() {
     data: {
       labels: es.map(e=>fmtDate(e.date)),
       datasets: [
-        { label:'現金・暗号資産', data: es.map(e=>+(e.cash/e.total*100).toFixed(2)),
+        { label:'現金', data: es.map(e=>+(e.cash/e.total*100).toFixed(2)),
           borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,.12)',
           borderWidth:2, fill:true, tension:.3,
           pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
-        { label:'株式（現物）', data: es.map(e=>+(e.stock/e.total*100).toFixed(2)),
+        { label:'株式', data: es.map(e=>+(e.stock/e.total*100).toFixed(2)),
           borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.12)',
           borderWidth:2, fill:true, tension:.3,
           pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
-        { label:'投資信託', data: es.map(e=>+(e.trust/e.total*100).toFixed(2)),
+        { label:'投信', data: es.map(e=>+(e.trust/e.total*100).toFixed(2)),
           borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.12)',
           borderWidth:2, fill:true, tension:.3,
           pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
@@ -740,9 +740,9 @@ function renderStackChart() {
   charts['stk'] = new Chart(ctx,{type:'bar',data:{
     labels:es.map(e=>fmtDate(e.date)),
     datasets:[
-      {label:'現金・暗号資産',data:es.map(e=>e.cash), backgroundColor:'rgba(201,168,76,.72)',stack:'s'},
-      {label:'株式（現物）',  data:es.map(e=>e.stock),backgroundColor:'rgba(96,165,250,.72)',stack:'s'},
-      {label:'投資信託',      data:es.map(e=>e.trust),backgroundColor:'rgba(167,139,250,.72)',stack:'s'},
+      {label:'現金',data:es.map(e=>e.cash), backgroundColor:'rgba(201,168,76,.72)',stack:'s'},
+      {label:'株式',  data:es.map(e=>e.stock),backgroundColor:'rgba(96,165,250,.72)',stack:'s'},
+      {label:'投信',      data:es.map(e=>e.trust),backgroundColor:'rgba(167,139,250,.72)',stack:'s'},
     ]
   },options:{responsive:true,maintainAspectRatio:false,
     plugins:{legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif",size:10},boxWidth:10,padding:14}},
@@ -788,8 +788,8 @@ function renderIncome() {
   charts['inc'] = new Chart(ctx,{type:'bar',data:{
     labels:months.map(m=>fmtYM(m.ym)),
     datasets:[
-      {label:'給与・収入',  data:months.map(m=>m.tx?m.tx.totalIncome:0),  backgroundColor:'rgba(74,222,128,.7)'},
-      {label:'支出合計',    data:months.map(m=>m.tx?-m.tx.totalExpense:0), backgroundColor:'rgba(248,113,113,.7)'},
+      {label:'給与収入',  data:months.map(m=>m.tx?m.tx.totalIncome:0),  backgroundColor:'rgba(74,222,128,.7)'},
+      {label:'支出',    data:months.map(m=>m.tx?-m.tx.totalExpense:0), backgroundColor:'rgba(248,113,113,.7)'},
       {label:'資産増加',    data:months.map(m=>m.assetDelta), backgroundColor:months.map(m=>m.assetDelta>=0?'rgba(201,168,76,.55)':'rgba(248,113,113,.3)')},
     ]
   },options:{responsive:true,maintainAspectRatio:false,
