@@ -398,6 +398,9 @@ tbody td:first-child{text-align:left;color:var(--dim)}
         </div>
         <button class="btn-s" style="font-size:10px" onclick="repairCategories()">修復する</button>
       </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+        <div>
+          <div style="font-size:12px;margin-bottom:2px">CSVバックアップ出力</div>
           <div style="font-size:10px;color:var(--dim)">iCloudに保存しておくと二重の保険に</div>
         </div>
         <button class="btn-s" style="font-size:10px" onclick="exportCSV()">CSV出力</button>
@@ -559,6 +562,8 @@ function repairCategories() {
     showMsg('cfgMsg', '文字化けは見つかりませんでした', 'ok');
   }
 }
+
+async function testGHConnection() {
   if (!GH?.token) { showMsg('cfgMsg','先に設定を保存してください','err'); return; }
   showMsg('cfgMsg','接続確認中…','ok', 9999);
   const loaded = await ghLoad();
