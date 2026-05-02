@@ -448,7 +448,13 @@ async function ghLoad() {
     if (res.status === 404) { setGHStatus('ok','GitHub接続済（データ新規作成）'); return false; }
     if (!res.ok) throw new Error(res.status);
     const json = await res.json();
-    const data = JSON.parse(atob(json.content.replace(/\n/g,'')));
+    // UTF-8対応のBase64デコード
+    const base64 = json.content.replace(/\n/g,'');
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const text = new TextDecoder('utf-8').decode(bytes);
+    const data = JSON.parse(text);
     GH.sha = json.sha;
     DB = data;
     saveLocal(DB);
