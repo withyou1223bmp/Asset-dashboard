@@ -356,11 +356,11 @@ tbody td:first-child{text-align:left;color:var(--dim)}
     <div class="form-grid">
       <div class="form-group">
         <label>GitHubユーザー名</label>
-        <input type="text" id="cfg-owner" placeholder="例: withyou1223bmp">
+        <input type="text" id="cfg-owner" placeholder="GitHubユーザー名">
       </div>
       <div class="form-group">
-        <label>リポジトリ名</label>
-        <input type="text" id="cfg-repo" placeholder="例: Asset-dashboard">
+        <label>リポジトリ名（データ保存先）</label>
+        <input type="text" id="cfg-repo" placeholder="Privateリポジトリ名">
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <label>Personal Access Token</label>
@@ -393,7 +393,11 @@ tbody td:first-child{text-align:left;color:var(--dim)}
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
         <div>
-          <div style="font-size:12px;margin-bottom:2px">CSVバックアップ出力</div>
+          <div style="font-size:12px;margin-bottom:2px">収支カテゴリの文字化けを修復</div>
+          <div style="font-size:10px;color:var(--dim)">カテゴリ名が文字化けしている場合に実行</div>
+        </div>
+        <button class="btn-s" style="font-size:10px" onclick="repairCategories()">修復する</button>
+      </div>
           <div style="font-size:10px;color:var(--dim)">iCloudに保存しておくと二重の保険に</div>
         </div>
         <button class="btn-s" style="font-size:10px" onclick="exportCSV()">CSV出力</button>
@@ -470,13 +474,18 @@ async function ghSave() {
   if (!GH?.token) { saveLocal(DB); return; }
   try {
     setGHStatus('loading','GitHubに保存中…');
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(DB))));
+    // UTF-8対応のBase64エンコード
+    const json = JSON.stringify(DB);
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const content = btoa(binary);
     const body = { message:'update data', content };
     if (GH.sha) body.sha = GH.sha;
     const res = await fetch(ghUrl(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
     if (!res.ok) throw new Error(res.status);
-    const json = await res.json();
-    GH.sha = json.content.sha;
+    const json2 = await res.json();
+    GH.sha = json2.content.sha;
     saveGHConfig();
     saveLocal(DB);
     setGHStatus('ok','GitHub保存済 '+fmtDate(new Date().toISOString().slice(0,10)));
@@ -513,7 +522,43 @@ async function uploadSeedData() {
   showMsg('cfgMsg','✓ 77週分をGitHubにアップロードしました','ok');
 }
 
-async function testGHConnection() {
+function repairCategories() {
+  // Fix mojibake: UTF-8 bytes were stored as latin-1 codepoints
+  // Repair by re-encoding as latin-1 bytes then decoding as UTF-8
+  function fixStr(s) {
+    if (typeof s !== 'string') return s;
+    try {
+      const bytes = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xFF;
+      const decoded = new TextDecoder('utf-8').decode(bytes);
+      // Only use fixed version if it looks like valid Japanese (contains CJK chars)
+      if (/[\u3000-\u9FFF]/.test(decoded)) return decoded;
+    } catch(e) {}
+    return s;
+  }
+
+  if (!DB.txByMonth) { showMsg('cfgMsg','収支データがありません','err'); return; }
+  let fixed = 0;
+  Object.keys(DB.txByMonth).forEach(ym => {
+    const tx = DB.txByMonth[ym];
+    if (!tx.byCategory) return;
+    const newCat = {};
+    Object.entries(tx.byCategory).forEach(([k, v]) => {
+      const fk = fixStr(k);
+      newCat[fk] = v;
+      if (fk !== k) fixed++;
+    });
+    tx.byCategory = newCat;
+  });
+
+  if (fixed > 0) {
+    ghSave();
+    renderIncome();
+    showMsg('cfgMsg', `✓ ${fixed}件のカテゴリ名を修復してGitHubに保存しました`, 'ok', 4000);
+  } else {
+    showMsg('cfgMsg', '文字化けは見つかりませんでした', 'ok');
+  }
+}
   if (!GH?.token) { showMsg('cfgMsg','先に設定を保存してください','err'); return; }
   showMsg('cfgMsg','接続確認中…','ok', 9999);
   const loaded = await ghLoad();
