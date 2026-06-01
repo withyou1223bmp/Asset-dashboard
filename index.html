@@ -157,6 +157,24 @@ tbody td:first-child{text-align:left;color:var(--dim)}
 .gh-sync-btn{padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--dim);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;white-space:nowrap}
 .gh-sync-btn:hover{border-color:var(--gold-dim);color:var(--gold)}
 
+/* ── Claude tab ── */
+.claude-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+@media(max-width:700px){.claude-grid{grid-template-columns:1fr}}
+.claude-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.claude-card-head{display:flex;align-items:baseline;gap:10px}
+.claude-num{font-size:11px;color:var(--gold);font-weight:500;letter-spacing:.06em;flex-shrink:0}
+.claude-title{font-family:'Shippori Mincho',serif;font-size:14px}
+.claude-desc{font-size:10px;color:var(--dim);line-height:1.7}
+.claude-out{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:11px;color:var(--text);font-family:'DM Mono',monospace;font-size:10px;resize:vertical;outline:none;min-height:140px;cursor:default;line-height:1.6}
+.claude-out:focus{border-color:var(--border)}
+.claude-actions{display:flex;gap:8px;align-items:center}
+.btn-gen{padding:8px 20px;background:var(--gold);border:none;border-radius:5px;color:#0d0f14;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;cursor:pointer;transition:opacity .15s;white-space:nowrap}
+.btn-gen:hover{opacity:.85}
+.btn-copy{padding:8px 16px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--dim);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-copy:hover{border-color:var(--dim);color:var(--text)}
+.claude-hint{margin-top:4px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:10px;color:var(--dim);line-height:1.8}
+.claude-hint b{color:var(--gold)}
+
 /* scrollbar */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -182,6 +200,7 @@ tbody td:first-child{text-align:left;color:var(--dim)}
   <button class="tab"     onclick="sw('income',this)">収支</button>
   <button class="tab"     onclick="sw('import',this)">取込</button>
   <button class="tab"     onclick="sw('history',this)">履歴</button>
+  <button class="tab"     onclick="sw('claude',this)">Claude</button>
   <button class="tab"     onclick="sw('settings',this)">設定</button>
 </div>
 
@@ -278,8 +297,6 @@ tbody td:first-child{text-align:left;color:var(--dim)}
 
 <!-- ===== IMPORT ===== -->
 <div class="panel" id="panel-import">
-
-  <!-- 資産残高 -->
   <div class="card">
     <div class="import-section">
       <h3>① 資産残高の取込（週次）</h3>
@@ -299,8 +316,6 @@ tbody td:first-child{text-align:left;color:var(--dim)}
       </div>
     </div>
   </div>
-
-  <!-- 収支明細 -->
   <div class="card">
     <div class="import-section">
       <h3>② 収支明細の取込（翌月初）</h3>
@@ -319,7 +334,6 @@ tbody td:first-child{text-align:left;color:var(--dim)}
       </div>
     </div>
   </div>
-
 </div>
 
 <!-- ===== HISTORY ===== -->
@@ -342,6 +356,79 @@ tbody td:first-child{text-align:left;color:var(--dim)}
       </table>
     </div>
   </div>
+</div>
+
+<!-- ===== CLAUDE ===== -->
+<div class="panel" id="panel-claude">
+
+  <div class="claude-hint" style="margin-bottom:18px">
+    <b>使い方：</b>相談内容に合ったボタンを「生成 → コピー」してClaudeに貼るだけ。<br>
+    同じ会話スレッドを使い続けると前の文脈が引き継がれ、毎回の説明が不要になります。
+  </div>
+
+  <div class="claude-grid">
+
+    <!-- ① 週次チェック -->
+    <div class="claude-card">
+      <div class="claude-card-head">
+        <span class="claude-num">① WEEKLY</span>
+        <span class="claude-title">週次チェック</span>
+      </div>
+      <div class="claude-desc">直近5週の推移と含み益。先週比・異常な動きの確認に。最軽量です。</div>
+      <textarea class="claude-out" id="cl-weekly" readonly placeholder="「生成」を押すとここにサマリーが表示されます"></textarea>
+      <div class="claude-actions">
+        <button class="btn-gen" onclick="genClaude('weekly')">生成</button>
+        <button class="btn-copy" onclick="copyClaude('cl-weekly','cl-weekly-msg')">コピー</button>
+        <span class="msg" id="cl-weekly-msg"></span>
+      </div>
+    </div>
+
+    <!-- ② 月次収支 -->
+    <div class="claude-card">
+      <div class="claude-card-head">
+        <span class="claude-num">② MONTHLY</span>
+        <span class="claude-title">月次収支レビュー</span>
+      </div>
+      <div class="claude-desc">直近月のカテゴリ別支出＋3ヶ月比較。支出改善・家計分析の相談に。</div>
+      <textarea class="claude-out" id="cl-monthly" readonly placeholder="「生成」を押すとここにサマリーが表示されます" style="min-height:180px"></textarea>
+      <div class="claude-actions">
+        <button class="btn-gen" onclick="genClaude('monthly')">生成</button>
+        <button class="btn-copy" onclick="copyClaude('cl-monthly','cl-monthly-msg')">コピー</button>
+        <span class="msg" id="cl-monthly-msg"></span>
+      </div>
+    </div>
+
+    <!-- ③ トレンド -->
+    <div class="claude-card">
+      <div class="claude-card-head">
+        <span class="claude-num">③ TREND</span>
+        <span class="claude-title">トレンド分析</span>
+      </div>
+      <div class="claude-desc">月末値12ヶ月分の推移テーブル。長期の資産増加ペース・配分変化の振り返りに。</div>
+      <textarea class="claude-out" id="cl-trend" readonly placeholder="「生成」を押すとここにサマリーが表示されます" style="min-height:200px"></textarea>
+      <div class="claude-actions">
+        <button class="btn-gen" onclick="genClaude('trend')">生成</button>
+        <button class="btn-copy" onclick="copyClaude('cl-trend','cl-trend-msg')">コピー</button>
+        <span class="msg" id="cl-trend-msg"></span>
+      </div>
+    </div>
+
+    <!-- ④ スナップショット -->
+    <div class="claude-card">
+      <div class="claude-card-head">
+        <span class="claude-num">④ SNAPSHOT</span>
+        <span class="claude-title">ポートフォリオ</span>
+      </div>
+      <div class="claude-desc">最新1件のみ。資産配分・含み益率・リバランス相談に。最もコンパクト。</div>
+      <textarea class="claude-out" id="cl-snapshot" readonly placeholder="「生成」を押すとここにサマリーが表示されます"></textarea>
+      <div class="claude-actions">
+        <button class="btn-gen" onclick="genClaude('snapshot')">生成</button>
+        <button class="btn-copy" onclick="copyClaude('cl-snapshot','cl-snapshot-msg')">コピー</button>
+        <span class="msg" id="cl-snapshot-msg"></span>
+      </div>
+    </div>
+
+  </div><!-- /claude-grid -->
 </div>
 
 <!-- ===== SETTINGS ===== -->
@@ -415,13 +502,9 @@ tbody td:first-child{text-align:left;color:var(--dim)}
 // ────────────────────────────────────────
 // STORAGE
 // ────────────────────────────────────────
-// ────────────────────────────────────────
-// GITHUB STORAGE
-// ────────────────────────────────────────
 const KEY = 'assetdb_v3';
 const GH_CONFIG_KEY = 'assetdb_gh_config';
 
-// GitHub config (stored in localStorage - only config, not data)
 let GH = null;
 function loadGHConfig() {
   try { const r = localStorage.getItem(GH_CONFIG_KEY); if(r) GH = JSON.parse(r); } catch(e){}
@@ -429,7 +512,6 @@ function loadGHConfig() {
 function saveGHConfig() { localStorage.setItem(GH_CONFIG_KEY, JSON.stringify(GH)); }
 loadGHConfig();
 
-// Local fallback (no seed - data lives in GitHub)
 function loadLocal() {
   try { const r = localStorage.getItem(KEY); if(r) return JSON.parse(r); } catch(e){}
   return { entries: [], txByMonth:{} };
@@ -455,7 +537,6 @@ async function ghLoad() {
     if (res.status === 404) { setGHStatus('ok','GitHub接続済（データ新規作成）'); return false; }
     if (!res.ok) throw new Error(res.status);
     const json = await res.json();
-    // UTF-8対応のBase64デコード
     const base64 = json.content.replace(/\n/g,'');
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
@@ -477,7 +558,6 @@ async function ghSave() {
   if (!GH?.token) { saveLocal(DB); return; }
   try {
     setGHStatus('loading','GitHubに保存中…');
-    // UTF-8対応のBase64エンコード
     const json = JSON.stringify(DB);
     const bytes = new TextEncoder().encode(json);
     let binary = '';
@@ -526,20 +606,16 @@ async function uploadSeedData() {
 }
 
 function repairCategories() {
-  // Fix mojibake: UTF-8 bytes were stored as latin-1 codepoints
-  // Repair by re-encoding as latin-1 bytes then decoding as UTF-8
   function fixStr(s) {
     if (typeof s !== 'string') return s;
     try {
       const bytes = new Uint8Array(s.length);
       for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xFF;
       const decoded = new TextDecoder('utf-8').decode(bytes);
-      // Only use fixed version if it looks like valid Japanese (contains CJK chars)
       if (/[\u3000-\u9FFF]/.test(decoded)) return decoded;
     } catch(e) {}
     return s;
   }
-
   if (!DB.txByMonth) { showMsg('cfgMsg','収支データがありません','err'); return; }
   let fixed = 0;
   Object.keys(DB.txByMonth).forEach(ym => {
@@ -553,7 +629,6 @@ function repairCategories() {
     });
     tx.byCategory = newCat;
   });
-
   if (fixed > 0) {
     ghSave();
     renderIncome();
@@ -621,7 +696,6 @@ function initSettings() {
 // CHART HELPERS
 // ────────────────────────────────────────
 let charts = {};
-// 日本語フォントをChart.jsのグローバルデフォルトに設定
 Chart.defaults.font.family = "'DM Mono', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif";
 Chart.defaults.font.size = 10;
 const CTICK = { color:'#6b7280', font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif", size:10} };
@@ -854,7 +928,6 @@ function renderIncome() {
     scales:{x:{grid:CGRID,ticks:{...CTICK,maxTicksLimit:12}},y:{grid:CGRID,ticks:{...CTICK,callback:v=>yFmt(Math.abs(v))}}}
   }});
 
-  // latest month with tx data
   const withTx = [...getMonthly()].reverse().find(m=>m.tx);
   if (withTx?.tx) {
     renderCatBreakdown(withTx.ym, withTx.tx);
@@ -864,7 +937,6 @@ function renderIncome() {
   }
   renderCatTrend();
 
-  // month cards
   document.getElementById('monthGrid').innerHTML = [...getMonthly()].reverse().slice(0,12).map(m=>{
     const tx=m.tx;
     const dCls=m.assetDelta>=0?'mc-pos':'mc-neg';
@@ -881,7 +953,6 @@ function renderIncome() {
 }
 
 function renderCatBreakdown(ym, tx) {
-  // expense categories
   const expCats = Object.entries(tx.byCategory||{})
     .filter(([,v])=>v<0).map(([k,v])=>({k,v:Math.abs(v)}))
     .sort((a,b)=>b.v-a.v).slice(0,8);
@@ -893,7 +964,6 @@ function renderCatBreakdown(ym, tx) {
       <span class="cat-amt">▲${v.toLocaleString()}</span>
     </div>`).join(''):'<div style="color:var(--dim);font-size:11px;padding:4px">データなし</div>';
 
-  // income categories
   const incCats = Object.entries(tx.byCategory||{})
     .filter(([,v])=>v>0).map(([k,v])=>({k,v}))
     .sort((a,b)=>b.v-a.v);
@@ -926,8 +996,6 @@ function renderCatTrend() {
     document.getElementById('cCatTrend').getContext('2d').clearRect(0,0,9999,9999);
     return;
   }
-
-  // Collect expense categories and sort by total across all months
   const catTotals = {};
   months.forEach(m=>{
     Object.entries(m.tx.byCategory||{}).forEach(([k,v])=>{
@@ -996,35 +1064,24 @@ function parseAsset() {
     const l = line.trim();
     if (!l) continue;
 
-    // セクション判定
     if (l.includes('預金・現金・暗号資産') || l.includes('現金・暗号資産')) { curSection='cash'; continue; }
     if (l.includes('株式（現物）') || l.includes('株式(現物)')) { curSection='stock'; continue; }
     if (l.includes('投資信託')) { curSection='trust'; continue; }
 
-    // セクション合計行
     const mTotal = l.match(/合計[：:]\s*([\d,]+)円/);
     if (mTotal && curSection && !totals[curSection]) {
       totals[curSection] = parseInt(mTotal[1].replace(/,/g,''));
       continue;
     }
 
-    // 株式・投信の明細行から評価損益を抽出
     if (curSection === 'stock' || curSection === 'trust') {
-      // タブ区切りの列から円表記の数値を全部抽出
       const cols = l.split('\t').map(s=>s.trim());
-      // 「NNN円」形式の列を探す（評価額、前日比、評価損益が対象）
-      const yenCols = cols
-        .map(c => c.match(/^([−\-]?[\d,]+)円$/) ? c : null)
-        .filter(Boolean);
+      const yenCols = cols.map(c => c.match(/^([−\-]?[\d,]+)円$/) ? c : null).filter(Boolean);
 
       if (curSection === 'stock') {
-        // 株式行フォーマット：...評価額 前日比 評価損益 評価損益率...
-        // 円表記が3つ以上ある行 → 評価損益は後ろから2番目の円表記
         if (yenCols.length >= 2) {
-          // 評価損益率（%）の直前の円表記が評価損益
           const pctIdx = cols.findIndex(c => c.includes('%') && !c.includes('円'));
           if (pctIdx > 0) {
-            // %の前の円表記列を探す
             for (let i = pctIdx - 1; i >= 0; i--) {
               const m = cols[i].match(/^([−\-]?[\d,]+)円$/);
               if (m) {
@@ -1035,7 +1092,6 @@ function parseAsset() {
           }
         }
       } else {
-        // 投信行フォーマット：...評価額 前日比 評価損益 評価損益率...
         const pctIdx = cols.findIndex(c => c.includes('%') && !c.includes('円'));
         if (pctIdx > 0) {
           for (let i = pctIdx - 1; i >= 0; i--) {
@@ -1050,7 +1106,6 @@ function parseAsset() {
     }
   }
 
-  // Fallback: 合計が3つ取れない場合
   if (Object.keys(totals).length < 3) {
     const all = [...text.matchAll(/合計[：:]\s*([\d,]+)円/g)];
     if (all.length >= 3) {
@@ -1105,24 +1160,13 @@ function saveAsset() {
 // ────────────────────────────────────────
 let parsedTx = null;
 
-// Categories to EXCLUDE (internal transfers / not real spending)
 const EXCLUDE_CATEGORIES = ['立替','お小遣い','事業投資'];
 
-// Exclude only true internal transfers, NOT credit card payments
-// "口座振替 イオンフィナンシャルサービス" = CC payment → should be EXCLUDED
-// because the actual spending is already captured in each card transaction.
-// SBI証券への「振替」= investment deposit → EXCLUDE
-// 口座間の「振替」(振替) tag = internal move → EXCLUDE
 function isExcluded(row) {
-  // Category-based exclusion
   if (EXCLUDE_CATEGORIES.some(c => row.category?.includes(c) || row.subcat?.includes(c))) return true;
-  // Marked as internal transfer by (振替) tag in institution column
   if (row.isTransfer) return true;
-  // SBI証券への入金（事業投資カテゴリで処理済みだが念のため）
   if (row.desc?.includes('振替 SBI証券')) return true;
-  // 口座間の資金移動キーワード（金融機関名のみの行）
   if (['SBIハイブリッド預金','代表口座','自宅修繕','ことら送金'].some(k => row.desc?.includes(k))) return true;
-  // クレカ引落は「口座振替 ○○カード」形式 → これは除外（カード明細側で計上）
   if (row.desc?.match(/口座振替\s.+カード/) || row.desc?.match(/口座振替\s.+サービス/)) return true;
   return false;
 }
@@ -1135,43 +1179,30 @@ function parseTx() {
   const rows = [];
   const lines = text.split('\n');
 
-  // Pattern: "MM/DD(曜)  内容  金額  金融機関  大項目  中項目"
-  // We look for lines containing a date like 03/25 and a number with sign
   for (let i=0; i<lines.length; i++) {
     const l = lines[i].trim();
-    // Match date prefix
     const dateM = l.match(/^(\d{2})\/(\d{2})[（(].[）)]/);
     if (!dateM) continue;
     const month = dateM[1], day = dateM[2];
     const date  = `${ym}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`.slice(0,10);
-    // Grab rest of line or next few lines collapsed
     const combined = [l, lines[i+1]||'', lines[i+2]||'', lines[i+3]||''].join('\t');
-    // Amount: look for standalone integer with optional minus and commas
     const amtM = combined.match(/([-−])?\s*([\d,]+)\s*(?:円|\t)/);
     if (!amtM) continue;
     const neg = amtM[1]?true:false;
     const amt = parseInt(amtM[2].replace(/,/g,'')) * (neg?-1:1);
-
-    // Try to extract description and category
-    // Columns are tab/whitespace separated: date desc amount institution cat subcat
     const parts = combined.split(/\t+/).map(s=>s.trim()).filter(Boolean);
     const desc = parts[1]||'';
-    // Find category columns (typically after institution name)
     const cat  = parts[4]||'';
     const subc = parts[5]||'';
-
-    // Detect (振替) tagged rows = internal account transfers
     const isTransfer = combined.includes('(振替)') || combined.includes('（振替）');
     rows.push({ date, desc, amount:amt, category:cat, subcat:subc, isTransfer });
   }
 
   if (!rows.length) { showMsg('txMsg','明細が見つかりません。収入・支出詳細ページ全体をコピーしてください','err'); return; }
 
-  // Filter
   const included = rows.filter(r=>!isExcluded(r));
   const excluded  = rows.filter(r=>isExcluded(r));
 
-  // Aggregate
   let totalIncome=0, totalExpense=0, salary=0, dividend=0;
   const byCategory = {};
 
@@ -1189,10 +1220,8 @@ function parseTx() {
   });
 
   const balance = totalIncome - totalExpense;
-
   parsedTx = { ym, totalIncome, totalExpense, salary, dividend, balance, byCategory, rowCount:included.length, excludedCount:excluded.length };
 
-  // Preview
   const topExp = Object.entries(byCategory).filter(([,v])=>v<0).sort((a,b)=>a[1]-b[1]).slice(0,5);
   const p = document.getElementById('txPreview');
   p.innerHTML = `
@@ -1257,6 +1286,144 @@ function exportCSV() {
   a.href=URL.createObjectURL(new Blob(['\uFEFF'+hdr+rows],{type:'text/csv'}));
   a.download='資産推移_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
+}
+
+// ────────────────────────────────────────
+// CLAUDE SUMMARY GENERATOR
+// ────────────────────────────────────────
+function fmtMan(n) {
+  if (n == null) return '—';
+  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  return sign + (abs >= 1e8 ? (abs/1e8).toFixed(2)+'億' : (abs/1e4).toFixed(0)+'万');
+}
+function fmtPct(a, b) {
+  if (!b) return '';
+  return ((a - b) / b * 100).toFixed(1) + '%';
+}
+
+function genClaude(mode) {
+  const es = entries();
+  if (!es.length) { return; }
+  let out = '';
+
+  if (mode === 'weekly') {
+    const slice = es.slice(-5);
+    out += '## 週次チェック（直近5週）\n\n';
+    out += '| 日付 | 現金 | 株式 | 投信 | 合計 | 前週比 |\n';
+    out += '|------|------|------|------|------|--------|\n';
+    slice.forEach((e, i) => {
+      const prev = i > 0 ? slice[i-1] : null;
+      const delta = prev ? e.total - prev.total : null;
+      const dStr = delta != null
+        ? (delta >= 0 ? '+' : '') + fmtMan(delta) + ' (' + fmtPct(e.total, prev.total) + ')'
+        : '—';
+      out += `| ${e.date} | ${fmtMan(e.cash)} | ${fmtMan(e.stock)} | ${fmtMan(e.trust)} | ${fmtMan(e.total)} | ${dStr} |\n`;
+    });
+    const cur = slice[slice.length - 1];
+    if (cur.stockGain != null) {
+      const sgPct = cur.stockCost ? (cur.stockGain / cur.stockCost * 100).toFixed(1) : '—';
+      const tgPct = cur.trustCost ? (cur.trustGain / cur.trustCost * 100).toFixed(1) : '—';
+      out += `\n含み益: 株式 +${fmtMan(cur.stockGain)} (+${sgPct}%) ／ 投信 +${fmtMan(cur.trustGain)} (+${tgPct}%)\n`;
+    }
+    document.getElementById('cl-weekly').value = out;
+
+  } else if (mode === 'monthly') {
+    const months = getMonthly().filter(m => m.tx);
+    if (!months.length) {
+      document.getElementById('cl-monthly').value = '収支データがありません。取込タブから登録してください。';
+      return;
+    }
+    const m = months[months.length - 1];
+    const tx = m.tx;
+    out += `## 月次収支レビュー: ${m.ym}\n\n`;
+    out += `収入合計: +${fmtMan(tx.totalIncome)}`;
+    out += ` (給与 ${fmtMan(tx.salary)}`;
+    if (tx.dividend) out += ` ／ 配当等 +${fmtMan(tx.dividend)}`;
+    out += ')\n';
+    out += `支出合計: ▲${fmtMan(tx.totalExpense)}\n`;
+    out += `収　　支: ${tx.balance >= 0 ? '+' : '▲'}${fmtMan(Math.abs(tx.balance))}\n`;
+    out += '\n### カテゴリ別支出（多い順）\n';
+    const cats = Object.entries(tx.byCategory || {})
+      .filter(([, v]) => v < 0)
+      .sort((a, b) => a[1] - b[1]);
+    cats.forEach(([k, v]) => {
+      out += `  ${k}: ▲${Math.abs(v).toLocaleString()}円\n`;
+    });
+    if (months.length >= 2) {
+      out += `\n### 直近${Math.min(3, months.length)}ヶ月の収支推移\n`;
+      months.slice(-3).forEach(mo => {
+        out += `  ${mo.ym}: 収入 +${fmtMan(mo.tx.totalIncome)} ／ 支出 ▲${fmtMan(mo.tx.totalExpense)} ／ 収支 ${mo.tx.balance >= 0 ? '+' : '▲'}${fmtMan(Math.abs(mo.tx.balance))}\n`;
+      });
+    }
+    document.getElementById('cl-monthly').value = out;
+
+  } else if (mode === 'trend') {
+    // 月末エントリのみ（各月の最後）
+    const byYm = {};
+    es.forEach(e => { byYm[e.date.slice(0, 7)] = e; });
+    const monthEnds = Object.values(byYm)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-13);
+    out += '## トレンド分析（月末値・直近12ヶ月）\n\n';
+    out += '| 月 | 合計 | 前月比 | 現金% | 株式% | 投信% |\n';
+    out += '|----|------|--------|-------|-------|-------|\n';
+    monthEnds.forEach((e, i) => {
+      const prev = i > 0 ? monthEnds[i - 1] : null;
+      const delta = prev ? e.total - prev.total : null;
+      const dStr = delta != null ? (delta >= 0 ? '+' : '') + fmtMan(delta) : '—';
+      const cashR = (e.cash / e.total * 100).toFixed(0) + '%';
+      const stkR  = (e.stock / e.total * 100).toFixed(0) + '%';
+      const trsR  = (e.trust / e.total * 100).toFixed(0) + '%';
+      out += `| ${e.date.slice(0, 7)} | ${fmtMan(e.total)} | ${dStr} | ${cashR} | ${stkR} | ${trsR} |\n`;
+    });
+    const first = monthEnds[0], last = monthEnds[monthEnds.length - 1];
+    if (first && last && monthEnds.length > 1) {
+      const growthAmt = last.total - first.total;
+      const growthPct = fmtPct(last.total, first.total);
+      out += `\n期間増加: ${fmtMan(first.total)} → ${fmtMan(last.total)}`;
+      out += ` (+${fmtMan(growthAmt)} / +${growthPct})\n`;
+    }
+    document.getElementById('cl-trend').value = out;
+
+  } else if (mode === 'snapshot') {
+    const cur = es[es.length - 1];
+    const prev = es.length > 1 ? es[es.length - 2] : null;
+    out += `## ポートフォリオスナップショット: ${cur.date}\n\n`;
+    out += `総資産: ${fmtMan(cur.total)}`;
+    if (prev) {
+      const d = cur.total - prev.total;
+      out += ` (前回比 ${d >= 0 ? '+' : '▲'}${fmtMan(Math.abs(d))} / ${fmtPct(cur.total, prev.total)})`;
+    }
+    out += '\n\n';
+    out += `現金・暗号資産: ${fmtMan(cur.cash).padStart(6)} (${(cur.cash / cur.total * 100).toFixed(1)}%)\n`;
+    out += `株式　　　　　: ${fmtMan(cur.stock).padStart(6)} (${(cur.stock / cur.total * 100).toFixed(1)}%)\n`;
+    out += `投資信託　　　: ${fmtMan(cur.trust).padStart(6)} (${(cur.trust / cur.total * 100).toFixed(1)}%)\n`;
+    if (cur.stockGain != null) {
+      const sgPct = cur.stockCost ? (cur.stockGain / cur.stockCost * 100).toFixed(1) : '—';
+      const tgPct = cur.trustCost ? (cur.trustGain / cur.trustCost * 100).toFixed(1) : '—';
+      const totalGain = (cur.stockGain || 0) + (cur.trustGain || 0);
+      const totalCost = (cur.stockCost || 0) + (cur.trustCost || 0);
+      const totPct = totalCost ? (totalGain / totalCost * 100).toFixed(1) : '—';
+      out += '\n含み益\n';
+      out += `  株式: +${fmtMan(cur.stockGain)} (元本 ${fmtMan(cur.stockCost)} / +${sgPct}%)\n`;
+      out += `  投信: +${fmtMan(cur.trustGain)} (元本 ${fmtMan(cur.trustCost)} / +${tgPct}%)\n`;
+      out += `  合計: +${fmtMan(totalGain)} (+${totPct}%)\n`;
+    }
+    document.getElementById('cl-snapshot').value = out;
+  }
+}
+
+function copyClaude(id, msgId) {
+  const el = document.getElementById(id);
+  if (!el.value) { showMsg(msgId, 'まず「生成」してください', 'err'); return; }
+  navigator.clipboard.writeText(el.value).then(() => {
+    showMsg(msgId, '✓ コピーしました', 'ok');
+  }).catch(() => {
+    el.select();
+    document.execCommand('copy');
+    showMsg(msgId, '✓ コピーしました', 'ok');
+  });
 }
 
 // ────────────────────────────────────────
