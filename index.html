@@ -179,6 +179,23 @@ tbody td:first-child{text-align:left;color:var(--dim)}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* update summary */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:4px}
+.summary-item{padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+.summary-lbl{font-size:10px;color:var(--dim);margin-bottom:3px;letter-spacing:.04em}
+.summary-val{font-size:12px}
+.summary-tags{margin-top:10px;font-size:11px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* portfolio allocation */
+.pie-wrap{position:relative;height:220px;max-width:260px;margin:0 auto}
+.ranking-list{display:flex;flex-direction:column;gap:0}
+.rank-row{display:grid;grid-template-columns:22px 1fr 72px 54px;gap:6px;align-items:center;font-size:11px;padding:5px 0;border-bottom:1px solid var(--border)}
+.rank-row:last-child{border:none}
+.rank-num{color:var(--dim);text-align:right;font-size:10px}
+.rank-name{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.rank-val{text-align:right;color:var(--dim);font-size:10px}
+.rank-pct{text-align:right;color:var(--gold);font-size:11px}
 </style>
 </head>
 <body>
@@ -206,6 +223,15 @@ tbody td:first-child{text-align:left;color:var(--dim)}
 
 <!-- ===== OVERVIEW ===== -->
 <div class="panel on" id="panel-overview">
+  <!-- Update Summary card -->
+  <div class="card" id="summaryCard" style="display:none">
+    <div class="card-head">
+      <span class="card-title">Update Summary</span>
+      <span class="hdr-sub" id="summaryDate" style="margin-left:8px;font-size:11px"></span>
+    </div>
+    <div id="summaryContent"></div>
+  </div>
+
   <div class="kpis" id="kpis"></div>
   <div class="card">
     <div class="card-head">
@@ -235,6 +261,18 @@ tbody td:first-child{text-align:left;color:var(--dim)}
     <div class="card-head"><span class="card-title">現在の資産配分</span></div>
     <div class="alloc-bar" id="allocBar"></div>
     <div class="alloc-leg" id="allocLeg"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">Portfolio Allocation</span></div>
+    <div class="two-col">
+      <div><div class="pie-wrap"><canvas id="cPie"></canvas></div></div>
+      <div>
+        <div style="font-size:10px;color:var(--dim);padding:2px 0 6px;display:grid;grid-template-columns:22px 1fr 72px 54px;gap:6px">
+          <span>#</span><span>銘柄</span><span style="text-align:right">評価額</span><span style="text-align:right">比率</span>
+        </div>
+        <div class="ranking-list" id="holdingsRank"></div>
+      </div>
+    </div>
   </div>
   <div class="card">
     <div class="card-head"><span class="card-title">含み益サマリー</span></div>
@@ -428,6 +466,21 @@ tbody td:first-child{text-align:left;color:var(--dim)}
       </div>
     </div>
 
+    <!-- ⑤ 銘柄構成比 + 差分 -->
+    <div class="claude-card" style="grid-column:1/-1">
+      <div class="claude-card-head">
+        <span class="claude-num">⑤ PORTFOLIO</span>
+        <span class="claude-title">銘柄構成比 &amp; 前回差分</span>
+      </div>
+      <div class="claude-desc">銘柄別の総資産比ランキング（上位10件）と前回取込との増減。取込タブで資産を保存後に生成できます。</div>
+      <textarea class="claude-out" id="cl-portfolio" readonly placeholder="「生成」を押すとここにサマリーが表示されます" style="min-height:200px"></textarea>
+      <div class="claude-actions">
+        <button class="btn-gen" onclick="genClaude('portfolio')">生成</button>
+        <button class="btn-copy" onclick="copyClaude('cl-portfolio','cl-portfolio-msg')">コピー</button>
+        <span class="msg" id="cl-portfolio-msg"></span>
+      </div>
+    </div>
+
   </div><!-- /claude-grid -->
 </div>
 
@@ -492,6 +545,13 @@ tbody td:first-child{text-align:left;color:var(--dim)}
         </div>
         <button class="btn-s" style="font-size:10px" onclick="exportCSV()">CSV出力</button>
       </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+        <div>
+          <div style="font-size:12px;margin-bottom:2px">history.jsonを初期化</div>
+          <div style="font-size:10px;color:var(--dim)">既存データをhistory.jsonに移行（初回のみ）</div>
+        </div>
+        <button class="btn-s" style="font-size:10px" onclick="migrateToHistory()">初期化</button>
+      </div>
     </div>
   </div>
 </div>
@@ -520,6 +580,74 @@ function saveLocal(d) { localStorage.setItem(KEY, JSON.stringify(d)); }
 let DB = loadLocal();
 
 function entries() { return [...DB.entries].sort((a,b)=>a.date.localeCompare(b.date)); }
+
+// ────────────────────────────────────────
+// HISTORY.JSON
+// ────────────────────────────────────────
+let HISTORY = [];
+let GH_HISTORY_SHA = null;
+
+function ghUrlHistory() {
+  return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/history.json`;
+}
+
+async function ghLoadHistory() {
+  if (!GH?.token) return false;
+  try {
+    const res = await fetch(ghUrlHistory(), { headers: ghHeaders() });
+    if (res.status === 404) { HISTORY = []; return false; }
+    if (!res.ok) throw new Error(res.status);
+    const json = await res.json();
+    const base64 = json.content.replace(/\n/g,'');
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const text = new TextDecoder('utf-8').decode(bytes);
+    HISTORY = JSON.parse(text);
+    GH_HISTORY_SHA = json.sha;
+    return true;
+  } catch(e) { console.warn('history.json load failed:', e); return false; }
+}
+
+async function ghSaveHistory() {
+  if (!GH?.token) return;
+  try {
+    const json = JSON.stringify(HISTORY);
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const content = btoa(binary);
+    const body = { message:'update history', content };
+    if (GH_HISTORY_SHA) body.sha = GH_HISTORY_SHA;
+    const res = await fetch(ghUrlHistory(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    if (!res.ok) throw new Error(res.status);
+    const json2 = await res.json();
+    GH_HISTORY_SHA = json2.content.sha;
+  } catch(e) { console.warn('history.json save failed:', e); }
+}
+
+function addToHistory(snapshot) {
+  const idx = HISTORY.findIndex(h => h.snapshotDate === snapshot.snapshotDate);
+  if (idx >= 0) HISTORY[idx] = snapshot;
+  else HISTORY.push(snapshot);
+  HISTORY.sort((a,b) => a.snapshotDate.localeCompare(b.snapshotDate));
+}
+
+async function migrateToHistory() {
+  if (!GH?.token) { showMsg('cfgMsg','先に接続設定をしてください','err'); return; }
+  const es = entries();
+  if (!es.length) { showMsg('cfgMsg','データがありません','err'); return; }
+  HISTORY = es.map(e => ({
+    snapshotDate: e.date,
+    cash: e.cash, stock: e.stock, trust: e.trust, total: e.total,
+    stockGain: e.stockGain||null, trustGain: e.trustGain||null,
+    stockCost: e.stockCost||null, trustCost: e.trustCost||null,
+    holdings: e.holdings||[]
+  }));
+  await ghSaveHistory();
+  renderOverview();
+  showMsg('cfgMsg', `✓ ${HISTORY.length}件をhistory.jsonに移行しました`, 'ok', 4000);
+}
 
 // ── GitHub API ──
 function ghHeaders() {
@@ -599,10 +727,16 @@ async function uploadSeedData() {
   if (!GH?.token) { showMsg('cfgMsg','先に接続設定をしてください','err'); return; }
   const SEED = [{"date":"2024-11-09","cash":1482210,"stock":11064788,"trust":1493977,"total":14040975},{"date":"2024-11-16","cash":1468702,"stock":10827621,"trust":1527404,"total":13823727},{"date":"2024-11-23","cash":1454734,"stock":10534754,"trust":1515492,"total":13504980},{"date":"2024-11-30","cash":1872768,"stock":10206776,"trust":1489688,"total":13569232},{"date":"2024-12-07","cash":1246085,"stock":10964255,"trust":1558785,"total":13769125},{"date":"2024-12-14","cash":1285629,"stock":12835523,"trust":1612783,"total":15733935},{"date":"2024-12-21","cash":1278537,"stock":12890622,"trust":1626163,"total":15795322},{"date":"2024-12-28","cash":1921769,"stock":13705383,"trust":1686125,"total":17313277},{"date":"2025-01-04","cash":2101875,"stock":13299404,"trust":1669347,"total":17070626},{"date":"2025-01-11","cash":1593093,"stock":12856390,"trust":1681207,"total":16130690},{"date":"2025-01-18","cash":1592497,"stock":13284497,"trust":1651216,"total":16528210},{"date":"2025-01-25","cash":1591588,"stock":13602413,"trust":1735059,"total":16929060},{"date":"2025-02-01","cash":2028340,"stock":12147277,"trust":1701586,"total":15877203},{"date":"2025-02-08","cash":1882321,"stock":12329988,"trust":1709974,"total":15922283},{"date":"2025-02-15","cash":1471403,"stock":12843061,"trust":1745186,"total":16059650},{"date":"2025-02-22","cash":1510303,"stock":12108279,"trust":1682240,"total":15300822},{"date":"2025-03-01","cash":2218731,"stock":11335990,"trust":1579660,"total":15134381},{"date":"2025-03-08","cash":1991259,"stock":10996691,"trust":1535683,"total":14523633},{"date":"2025-03-15","cash":2110288,"stock":11033805,"trust":1484628,"total":14628721},{"date":"2025-03-22","cash":2108992,"stock":10958779,"trust":1540746,"total":14608517},{"date":"2025-03-29","cash":2004542,"stock":10884327,"trust":1599899,"total":14488768},{"date":"2025-04-05","cash":1274077,"stock":10157566,"trust":1528281,"total":12959924},{"date":"2025-04-12","cash":1242111,"stock":10405971,"trust":1338581,"total":12986663},{"date":"2025-04-19","cash":1242510,"stock":9680500,"trust":1399928,"total":12322938},{"date":"2025-04-26","cash":1241652,"stock":10482135,"trust":1447306,"total":13171093},{"date":"2025-05-03","cash":1887988,"stock":11443050,"trust":1583038,"total":14914076},{"date":"2025-05-10","cash":1896197,"stock":11687943,"trust":1627217,"total":15211357},{"date":"2025-05-17","cash":1881099,"stock":12477370,"trust":1729582,"total":16088051},{"date":"2025-05-24","cash":1554972,"stock":12586576,"trust":1729582,"total":15871130},{"date":"2025-05-31","cash":1848582,"stock":13205600,"trust":1738658,"total":16792840},{"date":"2025-06-07","cash":1389997,"stock":13438542,"trust":1799259,"total":16627798},{"date":"2025-06-14","cash":1420422,"stock":13437158,"trust":1821558,"total":16679138},{"date":"2025-06-21","cash":1578602,"stock":13661301,"trust":1670591,"total":16910494},{"date":"2025-06-28","cash":1192606,"stock":14724811,"trust":1716366,"total":17633783},{"date":"2025-07-05","cash":1094494,"stock":14946223,"trust":1742854,"total":17783571},{"date":"2025-07-12","cash":1097590,"stock":15085217,"trust":1817627,"total":18000434},{"date":"2025-07-19","cash":1106376,"stock":15663939,"trust":1863696,"total":18634011},{"date":"2025-07-26","cash":1122642,"stock":15859187,"trust":1873617,"total":18855446},{"date":"2025-08-02","cash":2617885,"stock":16145462,"trust":1934211,"total":20697558},{"date":"2025-08-09","cash":1875211,"stock":16546892,"trust":1915402,"total":20337505},{"date":"2025-08-16","cash":1870669,"stock":16588829,"trust":1959309,"total":20418807},{"date":"2025-08-23","cash":1860294,"stock":16286369,"trust":1936541,"total":20083204},{"date":"2025-08-30","cash":3034476,"stock":16203376,"trust":1983462,"total":21221314},{"date":"2025-09-06","cash":2490735,"stock":17746537,"trust":2005032,"total":22242304},{"date":"2025-09-13","cash":2485932,"stock":18676515,"trust":2063280,"total":23225727},{"date":"2025-09-20","cash":2481187,"stock":18172506,"trust":2110026,"total":22763719},{"date":"2025-09-27","cash":3049328,"stock":18024396,"trust":2124305,"total":23198029},{"date":"2025-10-04","cash":2542827,"stock":17930643,"trust":2148103,"total":22621573},{"date":"2025-10-11","cash":2562225,"stock":17903257,"trust":2270398,"total":22735880},{"date":"2025-10-18","cash":2540667,"stock":18713735,"trust":2195541,"total":23449943},{"date":"2025-10-25","cash":3143958,"stock":19389575,"trust":2271700,"total":24805233},{"date":"2025-11-01","cash":3028924,"stock":20184116,"trust":2361061,"total":25574101},{"date":"2025-11-08","cash":2494493,"stock":19145497,"trust":2313048,"total":23953038},{"date":"2025-11-15","cash":2478692,"stock":19159307,"trust":2340252,"total":23978251},{"date":"2025-11-22","cash":2467896,"stock":19742682,"trust":2302512,"total":24513090},{"date":"2025-11-29","cash":2942556,"stock":21883200,"trust":2391868,"total":27217624},{"date":"2025-12-06","cash":2260138,"stock":20726142,"trust":2404898,"total":25391178},{"date":"2025-12-13","cash":2327241,"stock":19989808,"trust":2457550,"total":24774599},{"date":"2025-12-20","cash":2318926,"stock":19316336,"trust":2406801,"total":24042063},{"date":"2025-12-27","cash":2299483,"stock":19820372,"trust":2494293,"total":24614148},{"date":"2026-01-03","cash":2259520,"stock":17760319,"trust":2493107,"total":22512946},{"date":"2026-01-10","cash":2226688,"stock":19396466,"trust":2544398,"total":24167552},{"date":"2026-01-17","cash":1832135,"stock":19638027,"trust":2582834,"total":24052996},{"date":"2026-01-24","cash":1908342,"stock":18547103,"trust":2577200,"total":23032645},{"date":"2026-01-31","cash":1388003,"stock":18711236,"trust":2551179,"total":22650418},{"date":"2026-02-07","cash":1305469,"stock":19048645,"trust":1956898,"total":22311012},{"date":"2026-02-14","cash":1362556,"stock":18433411,"trust":1967755,"total":21763722},{"date":"2026-02-21","cash":1804985,"stock":18863838,"trust":2004219,"total":22673042},{"date":"2026-02-28","cash":2402276,"stock":18450867,"trust":2050587,"total":22903730},{"date":"2026-03-07","cash":2170067,"stock":19025396,"trust":2044890,"total":23240353},{"date":"2026-03-14","cash":2064987,"stock":19215244,"trust":2097874,"total":23378105},{"date":"2026-03-21","cash":2012191,"stock":18797409,"trust":2086952,"total":22896552},{"date":"2026-03-28","cash":2428114,"stock":17931943,"trust":2029118,"total":22389175},{"date":"2026-04-04","cash":1736179,"stock":18487600,"trust":2078175,"total":22301954},{"date":"2026-04-11","cash":1687112,"stock":20603437,"trust":2202055,"total":24492604},{"date":"2026-04-18","cash":1731039,"stock":22219534,"trust":2315455,"total":26266028},{"date":"2026-04-25","cash":2384221,"stock":22709892,"trust":2356840,"total":27450953}];
   DB = { entries: SEED.map(e=>({...e})), txByMonth:{} };
-  await ghSave();
+  HISTORY = SEED.map(e => ({
+    snapshotDate: e.date,
+    cash: e.cash, stock: e.stock, trust: e.trust, total: e.total,
+    stockGain: null, trustGain: null, stockCost: null, trustCost: null,
+    holdings: []
+  }));
+  await Promise.all([ghSave(), ghSaveHistory()]);
   saveLocal(DB);
   renderOverview();
-  showMsg('cfgMsg','✓ 77週分をGitHubにアップロードしました','ok');
+  showMsg('cfgMsg','✓ 77週分をGitHub (data.json + history.json) にアップロードしました','ok');
 }
 
 function repairCategories() {
@@ -742,6 +876,7 @@ function renderOverview() {
   }).join('');
 
   renderTotalChart(); renderStackChart(); renderAlloc(cur); renderAllocTrend(); renderGainKPIs(cur); renderGainChart();
+  renderUpdateSummary(); renderPortfolioAllocation();
 }
 
 function renderGainKPIs(cur) {
@@ -886,6 +1021,139 @@ function renderAlloc(cur) {
   const segs=[{v:cur.cash,c:'#c9a84c',l:'現金'},{v:cur.stock,c:'#60a5fa',l:'株式'},{v:cur.trust,c:'#a78bfa',l:'投信'}];
   document.getElementById('allocBar').innerHTML = segs.map(s=>`<div class="alloc-seg" style="width:${(s.v/t*100).toFixed(2)}%;background:${s.c}"></div>`).join('');
   document.getElementById('allocLeg').innerHTML = segs.map(s=>`<span><span class="dot" style="background:${s.c}"></span>${s.l} ${(s.v/t*100).toFixed(1)}%</span>`).join('');
+}
+
+// ────────────────────────────────────────
+// UPDATE SUMMARY
+// ────────────────────────────────────────
+function renderUpdateSummary() {
+  const card = document.getElementById('summaryCard');
+  if (HISTORY.length < 2) { card.style.display='none'; return; }
+  const cur = HISTORY[HISTORY.length-1];
+  const prev = HISTORY[HISTORY.length-2];
+  card.style.display = '';
+  document.getElementById('summaryDate').textContent = fmtDate(cur.snapshotDate)+' 更新';
+
+  const diffHtml = (a, b) => {
+    if (a==null||b==null) return '<span style="color:var(--dim)">—</span>';
+    const d = a - b, sign = d>=0?'+':'';
+    const pct = b ? (d/b*100).toFixed(1) : '0.0';
+    return `<span class="${d>=0?'kpi-d up':'kpi-d dn'}">${sign}${d.toLocaleString()}円<br><small>${sign}${pct}%</small></span>`;
+  };
+
+  const base = [
+    {l:'総資産', a:cur.total, b:prev.total},
+    {l:'現金', a:cur.cash, b:prev.cash},
+    {l:'株式', a:cur.stock, b:prev.stock},
+    {l:'投信', a:cur.trust, b:prev.trust},
+  ];
+  let html = '<div class="summary-grid">';
+  base.forEach(({l,a,b}) => {
+    html += `<div class="summary-item"><div class="summary-lbl">${l}</div>${diffHtml(a,b)}</div>`;
+  });
+
+  const curMap = new Map((cur.holdings||[]).map(h=>[h.name, h.value]));
+  const prevMap = new Map((prev.holdings||[]).map(h=>[h.name, h.value]));
+  const allNames = new Set([...curMap.keys(), ...prevMap.keys()]);
+  const diffs = [];
+  allNames.forEach(name => {
+    const cv = curMap.get(name)||0, pv = prevMap.get(name)||0;
+    if (!pv && cv) return; // new — skip from delta items
+    if (!cv && pv) return; // sold — skip
+    if (cv && pv) diffs.push({name, d:cv-pv, pv});
+  });
+  diffs.sort((a,b) => Math.abs(b.d)-Math.abs(a.d));
+  diffs.slice(0,4).forEach(({name, d, pv}) => {
+    const sign = d>=0?'+':'';
+    const pct = pv ? (d/pv*100).toFixed(1) : '0.0';
+    html += `<div class="summary-item"><div class="summary-lbl">${name}</div><span class="${d>=0?'kpi-d up':'kpi-d dn'}">${sign}${d.toLocaleString()}円<br><small>${sign}${pct}%</small></span></div>`;
+  });
+  html += '</div>';
+
+  const newH = [...allNames].filter(n => !prevMap.has(n) && curMap.has(n));
+  const soldH = [...allNames].filter(n => !curMap.has(n) && prevMap.has(n));
+  if (newH.length || soldH.length) {
+    html += '<div class="summary-tags">';
+    if (newH.length) html += `<span style="color:var(--green)">新規: ${newH.join(' ')}</span>`;
+    if (soldH.length) html += `<span style="color:var(--red)">売却: ${soldH.join(' ')}</span>`;
+    html += '</div>';
+  } else if (curMap.size > 0) {
+    html += '<div class="summary-tags"><span style="color:var(--dim)">新規銘柄: なし</span></div>';
+  }
+
+  document.getElementById('summaryContent').innerHTML = html;
+}
+
+// ────────────────────────────────────────
+// PORTFOLIO ALLOCATION
+// ────────────────────────────────────────
+const PIE_COLORS = ['#c9a84c','#60a5fa','#a78bfa','#4ade80','#f87171','#fb923c','#22d3ee','#f472b6','#86efac','#94a3b8'];
+
+function getAggregatedHoldings() {
+  const snap = [...HISTORY].reverse().find(h => h.holdings?.length > 0);
+  if (!snap) return [];
+  const map = new Map();
+  snap.holdings.forEach(h => { map.set(h.name, (map.get(h.name)||0) + h.value); });
+  return [...map.entries()].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+}
+
+function renderPortfolioAllocation() {
+  const es = entries();
+  if (!es.length) return;
+  const total = es[es.length-1].total;
+  const holdings = getAggregatedHoldings();
+
+  destroyChart('pie');
+  const ctx = document.getElementById('cPie').getContext('2d');
+  const rankEl = document.getElementById('holdingsRank');
+
+  if (holdings.length > 0) {
+    const top9 = holdings.slice(0,9);
+    const othersVal = holdings.slice(9).reduce((s,h)=>s+h.value, 0);
+    const chartData = othersVal > 0 ? [...top9, {name:'その他', value:othersVal}] : top9;
+    charts['pie'] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: chartData.map(h=>h.name),
+        datasets: [{ data: chartData.map(h=>h.value), backgroundColor: PIE_COLORS, borderColor:'#151820', borderWidth:2 }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins: {
+          legend:{display:false},
+          tooltip:{...CTOOLTIP, callbacks:{label:c=>` ${c.label}: ${(c.parsed/total*100).toFixed(1)}% (${(c.parsed/10000).toFixed(0)}万円)`}}
+        }
+      }
+    });
+
+    rankEl.innerHTML = holdings.slice(0,10).map((h,i) => {
+      const pct = (h.value/total*100).toFixed(2);
+      return `<div class="rank-row">
+        <span class="rank-num" style="color:${PIE_COLORS[i%PIE_COLORS.length]}">${i+1}</span>
+        <span class="rank-name">${h.name}</span>
+        <span class="rank-val">${(h.value/10000).toFixed(0)}万</span>
+        <span class="rank-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+  } else {
+    // Fallback: cash/stock/trust pie
+    const cur = es[es.length-1];
+    charts['pie'] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels:['現金','株式','投資信託'],
+        datasets:[{data:[cur.cash,cur.stock,cur.trust], backgroundColor:['#c9a84c','#60a5fa','#a78bfa'], borderColor:'#151820', borderWidth:2}]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:true,position:'bottom',labels:{color:'#6b7280',font:{family:"'DM Mono',sans-serif",size:10},boxWidth:8,padding:10}},
+          tooltip:{...CTOOLTIP,callbacks:{label:c=>` ${c.label}: ${(c.parsed/total*100).toFixed(1)}%`}}
+        }
+      }
+    });
+    rankEl.innerHTML = '<div style="color:var(--dim);font-size:11px;padding:8px 0">次回の資産取込から銘柄別データが表示されます</div>';
+  }
 }
 
 // ────────────────────────────────────────
@@ -1059,6 +1327,7 @@ function parseAsset() {
   let curSection = null;
   const totals = {};
   let stockGain = 0, trustGain = 0;
+  const holdingsMap = new Map();
 
   for (const line of lines) {
     const l = line.trim();
@@ -1078,27 +1347,41 @@ function parseAsset() {
       const cols = l.split('\t').map(s=>s.trim());
       const yenCols = cols.map(c => c.match(/^([−\-]?[\d,]+)円$/) ? c : null).filter(Boolean);
 
-      if (curSection === 'stock') {
-        if (yenCols.length >= 2) {
-          const pctIdx = cols.findIndex(c => c.includes('%') && !c.includes('円'));
-          if (pctIdx > 0) {
-            for (let i = pctIdx - 1; i >= 0; i--) {
-              const m = cols[i].match(/^([−\-]?[\d,]+)円$/);
-              if (m) {
-                const v = parseInt(m[1].replace(/,/g,'').replace('−','-'));
-                if (!isNaN(v)) { stockGain += v; break; }
-              }
-            }
-          }
+      const pctIdx = cols.findIndex(c => c.includes('%') && !c.includes('円'));
+      if (pctIdx > 0) {
+        // gain: rightmost yen col before %
+        let gainIdx = -1;
+        for (let i = pctIdx - 1; i >= 0; i--) {
+          if (cols[i].match(/^([−\-]?[\d,]+)円$/)) { gainIdx = i; break; }
         }
-      } else {
-        const pctIdx = cols.findIndex(c => c.includes('%') && !c.includes('円'));
-        if (pctIdx > 0) {
-          for (let i = pctIdx - 1; i >= 0; i--) {
-            const m = cols[i].match(/^([−\-]?[\d,]+)円$/);
-            if (m) {
-              const v = parseInt(m[1].replace(/,/g,'').replace('−','-'));
-              if (!isNaN(v)) { trustGain += v; break; }
+        if (gainIdx >= 0) {
+          const gv = parseInt(cols[gainIdx].replace(/,/g,'').replace('円','').replace('−','-'));
+          if (!isNaN(gv)) {
+            if (curSection === 'stock') stockGain += gv;
+            else trustGain += gv;
+          }
+
+          // value: rightmost positive yen col before gain
+          let valueIdx = -1;
+          for (let i = gainIdx - 1; i >= 0; i--) {
+            if (cols[i].match(/^[\d,]+円$/)) { valueIdx = i; break; }
+          }
+
+          // name: first col that looks like a ticker/fund name
+          const name = cols.find(c =>
+            c.length > 0 &&
+            !/^[\d,]+円?$/.test(c) &&
+            !c.includes('%') &&
+            !/^\d+株$/.test(c) &&
+            !/^\d+口$/.test(c) &&
+            !/^[-−]$/.test(c) &&
+            c !== '—'
+          );
+
+          if (name && valueIdx >= 0) {
+            const val = parseInt(cols[valueIdx].replace(/,/g,'').replace('円',''));
+            if (!isNaN(val) && val > 0) {
+              holdingsMap.set(name, (holdingsMap.get(name)||0) + val);
             }
           }
         }
@@ -1124,7 +1407,8 @@ function parseAsset() {
   const stockCost = (totals.stock||0) - stockGain;
   const trustCost = (totals.trust||0) - trustGain;
 
-  parsedAsset = { date, cash:totals.cash||0, stock:totals.stock||0, trust:totals.trust||0, total, stockGain, trustGain, stockCost, trustCost };
+  const holdings = [...holdingsMap.entries()].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+  parsedAsset = { date, cash:totals.cash||0, stock:totals.stock||0, trust:totals.trust||0, total, stockGain, trustGain, stockCost, trustCost, holdings };
 
   const gainSign = v => v >= 0
     ? `<span style="color:var(--green)">+${v.toLocaleString()}円</span>`
@@ -1148,7 +1432,19 @@ function saveAsset() {
   const idx = DB.entries.findIndex(e=>e.date===parsedAsset.date);
   if (idx>=0) DB.entries[idx]={...DB.entries[idx],...parsedAsset};
   else DB.entries.push(parsedAsset);
+
+  // Append to history.json
+  addToHistory({
+    snapshotDate: parsedAsset.date,
+    cash: parsedAsset.cash, stock: parsedAsset.stock,
+    trust: parsedAsset.trust, total: parsedAsset.total,
+    stockGain: parsedAsset.stockGain, trustGain: parsedAsset.trustGain,
+    stockCost: parsedAsset.stockCost, trustCost: parsedAsset.trustCost,
+    holdings: parsedAsset.holdings||[]
+  });
+
   ghSave();
+  ghSaveHistory();
   renderOverview();
   showMsg('assetMsg','✓ 保存しました','ok');
   document.getElementById('assetSaveBtn').style.display='none';
@@ -1411,6 +1707,63 @@ function genClaude(mode) {
       out += `  合計: +${fmtMan(totalGain)} (+${totPct}%)\n`;
     }
     document.getElementById('cl-snapshot').value = out;
+
+  } else if (mode === 'portfolio') {
+    const holdings = getAggregatedHoldings();
+    const total = es[es.length-1].total;
+
+    out += '## ポートフォリオ構成比（銘柄別・上位10件）\n\n';
+    if (holdings.length > 0) {
+      out += '■銘柄構成比（総資産比）\n';
+      holdings.slice(0,10).forEach(h => {
+        const pct = (h.value/total*100).toFixed(2);
+        out += `${h.name.padEnd(24)} ${pct}%  (${(h.value/10000).toFixed(0)}万円)\n`;
+      });
+    } else {
+      out += '（銘柄データなし。取込タブで資産を保存してください）\n';
+    }
+
+    if (HISTORY.length >= 2) {
+      const cur = HISTORY[HISTORY.length-1];
+      const prev = HISTORY[HISTORY.length-2];
+      const curMap = new Map((cur.holdings||[]).map(h=>[h.name,h.value]));
+      const prevMap = new Map((prev.holdings||[]).map(h=>[h.name,h.value]));
+
+      out += '\n■前回との差分\n';
+      const base = [
+        {l:'総資産',    c:cur.total, p:prev.total},
+        {l:'現金',      c:cur.cash,  p:prev.cash},
+        {l:'株式',      c:cur.stock, p:prev.stock},
+        {l:'投資信託',  c:cur.trust, p:prev.trust},
+      ];
+      base.forEach(({l,c,p}) => {
+        const d = c-p, sign = d>=0?'+':'';
+        const pct = p ? (d/p*100).toFixed(1) : '0.0';
+        out += `${l.padEnd(8)} ${sign}${d.toLocaleString()}円 (${sign}${pct}%)\n`;
+      });
+
+      const allNames = new Set([...curMap.keys(), ...prevMap.keys()]);
+      const diffs = [];
+      allNames.forEach(name => {
+        const cv = curMap.get(name)||0, pv = prevMap.get(name)||0;
+        if (cv && pv) diffs.push({name, d:cv-pv, pv});
+      });
+      if (diffs.length) {
+        diffs.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+        diffs.slice(0,5).forEach(({name,d,pv}) => {
+          const sign = d>=0?'+':'';
+          const pct = pv ? (d/pv*100).toFixed(1) : '0.0';
+          out += `${name.padEnd(12)} ${sign}${d.toLocaleString()}円 (${sign}${pct}%)\n`;
+        });
+      }
+
+      const newH = [...allNames].filter(n => !prevMap.has(n) && curMap.has(n));
+      const soldH = [...allNames].filter(n => !curMap.has(n) && prevMap.has(n));
+      if (newH.length) out += `\n新規銘柄: ${newH.join(', ')}\n`;
+      if (soldH.length) out += `売却銘柄: ${soldH.join(', ')}\n`;
+      if (!newH.length && !soldH.length && curMap.size > 0) out += '\n新規・売却銘柄: なし\n';
+    }
+    document.getElementById('cl-portfolio').value = out;
   }
 }
 
@@ -1432,7 +1785,7 @@ function copyClaude(id, msgId) {
 (async () => {
   if (GH?.token) {
     setGHStatus('loading', 'GitHubからデータを読み込み中…');
-    const ok = await ghLoad();
+    const [ok] = await Promise.all([ghLoad(), ghLoadHistory()]);
     if (ok) { renderOverview(); renderHistory(); }
     else { renderOverview(); }
   } else {
