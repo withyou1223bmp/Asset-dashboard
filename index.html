@@ -1624,8 +1624,8 @@ function getHoldingsAt(date) {
 function holdingsSummaryText(total, date) {
   const holdings = date ? getHoldingsAt(date) : getAggregatedHoldings();
   if (!holdings.length) return '';
-  let s = '\n■銘柄構成比（総資産比・上位10件）\n';
-  holdings.slice(0,10).forEach(h => {
+  let s = '\n■銘柄構成比（総資産比）\n';
+  holdings.forEach(h => {
     const pct = (h.value/total*100).toFixed(2);
     s += `${h.name.padEnd(24)} ${pct}%\n`;
   });
