@@ -212,7 +212,7 @@ tbody td:first-child{text-align:left;color:var(--dim)}
 
 <div class="gh-bar">
   <span class="gh-status none" id="ghStatus">GitHub未設定 — 設定タブでトークンを入力してください</span>
-  <button class="gh-sync-btn" onclick="ghLoad().then(()=>{renderOverview();renderHistory();})">↻ 同期</button>
+  <button class="gh-sync-btn" onclick="Promise.all([ghLoad(),ghLoadHistory()]).then(()=>{renderOverview();renderHistory();})">↻ 同期</button>
 </div>
 
 <div class="tabs">
@@ -947,27 +947,23 @@ function renderAllocTrend() {
   destroyChart('alloc');
   const ctx = document.getElementById('cAlloc').getContext('2d');
   const JA_FONT = "'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif";
-  // 累積値で積み上げ → 常に合計100%になる
-  const cashPcts  = es.map(e => +(e.cash/e.total*100).toFixed(3));
-  const stackPcts = es.map(e => +((e.cash+e.stock)/e.total*100).toFixed(3));
-  const topPcts   = es.map(() => 100);
   const pr = es.length > 30 ? 0 : 2;
   charts['alloc'] = new Chart(ctx, {
     type: 'line',
     data: {
       labels: es.map(e=>fmtDate(e.date)),
       datasets: [
-        { label:'現金', data: cashPcts,
+        { label:'現金', data: es.map(e=>+(e.cash/e.total*100).toFixed(2)),
           borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,.55)',
-          borderWidth:1, fill:'origin', tension:.3,
+          borderWidth:1, fill:true, tension:0,
           pointRadius:pr, pointHoverRadius:4 },
-        { label:'株式', data: stackPcts,
+        { label:'株式', data: es.map(e=>+(e.stock/e.total*100).toFixed(2)),
           borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.55)',
-          borderWidth:1, fill:'-1', tension:.3,
+          borderWidth:1, fill:true, tension:0,
           pointRadius:pr, pointHoverRadius:4 },
-        { label:'投信', data: topPcts,
+        { label:'投信', data: es.map(e=>+(e.trust/e.total*100).toFixed(2)),
           borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.55)',
-          borderWidth:1, fill:'-1', tension:.3,
+          borderWidth:1, fill:true, tension:0,
           pointRadius:pr, pointHoverRadius:4 },
       ]
     },
@@ -978,18 +974,12 @@ function renderAllocTrend() {
           labels:{ color:'#6b7280', font:{family:JA_FONT,size:10}, boxWidth:10, padding:14 }
         },
         tooltip:{ ...CTOOLTIP,
-          callbacks:{ label: c => {
-            const e = es[c.dataIndex];
-            const pct = c.dataset.label==='現金'  ? e.cash/e.total*100
-                      : c.dataset.label==='株式'  ? e.stock/e.total*100
-                      : e.trust/e.total*100;
-            return ' '+c.dataset.label+': '+pct.toFixed(1)+'%';
-          }}
+          callbacks:{ label: c => ' '+c.dataset.label+': '+c.parsed.y.toFixed(1)+'%' }
         }
       },
       scales: {
         x:{ grid:CGRID, ticks:{...CTICK, maxTicksLimit:10} },
-        y:{ grid:CGRID, min:0, max:100, ticks:{...CTICK, callback:v=>v+'%'} }
+        y:{ stacked:true, grid:CGRID, min:0, max:100, ticks:{...CTICK, callback:v=>v+'%'} }
       }
     }
   });
