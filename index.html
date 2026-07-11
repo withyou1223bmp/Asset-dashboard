@@ -522,24 +522,10 @@ tbody td:first-child{text-align:left;color:var(--dim)}
     <div style="display:flex;flex-direction:column;gap:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
         <div>
-          <div style="font-size:12px;margin-bottom:2px">過去データを初回アップロード</div>
-          <div style="font-size:10px;color:var(--dim)">2024/11〜2026/04の77週分をGitHubに保存</div>
-        </div>
-        <button class="btn-s" style="font-size:10px" onclick="uploadSeedData()">アップロード</button>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-        <div>
           <div style="font-size:12px;margin-bottom:2px">GitHubからデータを復元</div>
           <div style="font-size:10px;color:var(--dim)">Safariのデータが消えた場合に使用</div>
         </div>
-        <button class="btn-s" style="font-size:10px" onclick="ghLoad().then(r=>{if(r){renderOverview();renderHistory();showMsg('cfgMsg','✓ 復元しました','ok')}})">復元する</button>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-        <div>
-          <div style="font-size:12px;margin-bottom:2px">収支カテゴリの文字化けを修復</div>
-          <div style="font-size:10px;color:var(--dim)">カテゴリ名が文字化けしている場合に実行</div>
-        </div>
-        <button class="btn-s" style="font-size:10px" onclick="repairCategories()">修復する</button>
+        <button class="btn-s" style="font-size:10px" onclick="Promise.all([ghLoad(),ghLoadHistory()]).then(([r])=>{if(r){renderOverview();renderHistory();showMsg('cfgMsg','✓ 復元しました','ok')}})">復元する</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
         <div>
@@ -547,13 +533,6 @@ tbody td:first-child{text-align:left;color:var(--dim)}
           <div style="font-size:10px;color:var(--dim)">iCloudに保存しておくと二重の保険に</div>
         </div>
         <button class="btn-s" style="font-size:10px" onclick="exportCSV()">CSV出力</button>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-        <div>
-          <div style="font-size:12px;margin-bottom:2px">history.jsonを初期化</div>
-          <div style="font-size:10px;color:var(--dim)">既存データをhistory.jsonに移行（初回のみ）</div>
-        </div>
-        <button class="btn-s" style="font-size:10px" onclick="migrateToHistory()">初期化</button>
       </div>
     </div>
   </div>
