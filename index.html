@@ -263,7 +263,7 @@ tbody td:first-child{text-align:left;color:var(--dim)}
     <div class="alloc-leg" id="allocLeg"></div>
   </div>
   <div class="card">
-    <div class="card-head"><span class="card-title">Portfolio Allocation</span></div>
+    <div class="card-head"><span class="card-title">ポートフォリオ構成比</span></div>
     <div class="two-col">
       <div><div class="pie-wrap"><canvas id="cPie"></canvas></div></div>
       <div>
@@ -943,40 +943,50 @@ function renderAllocTrend() {
   const es = entries().slice(-rAlloc);
   destroyChart('alloc');
   const ctx = document.getElementById('cAlloc').getContext('2d');
+  const JA_FONT = "'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif";
+  // 累積値で積み上げ → 常に合計100%になる
+  const cashPcts  = es.map(e => +(e.cash/e.total*100).toFixed(3));
+  const stackPcts = es.map(e => +((e.cash+e.stock)/e.total*100).toFixed(3));
+  const topPcts   = es.map(() => 100);
+  const pr = es.length > 30 ? 0 : 2;
   charts['alloc'] = new Chart(ctx, {
     type: 'line',
     data: {
       labels: es.map(e=>fmtDate(e.date)),
       datasets: [
-        { label:'現金', data: es.map(e=>+(e.cash/e.total*100).toFixed(2)),
-          borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,.12)',
-          borderWidth:2, fill:true, tension:.3,
-          pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
-        { label:'株式', data: es.map(e=>+(e.stock/e.total*100).toFixed(2)),
-          borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.12)',
-          borderWidth:2, fill:true, tension:.3,
-          pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
-        { label:'投信', data: es.map(e=>+(e.trust/e.total*100).toFixed(2)),
-          borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.12)',
-          borderWidth:2, fill:true, tension:.3,
-          pointRadius:es.length>30?0:2, pointHoverRadius:4, stack:'s' },
+        { label:'投信', data: topPcts,
+          borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.55)',
+          borderWidth:1, fill:'-1', tension:.3,
+          pointRadius:pr, pointHoverRadius:4 },
+        { label:'株式', data: stackPcts,
+          borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.55)',
+          borderWidth:1, fill:'-1', tension:.3,
+          pointRadius:pr, pointHoverRadius:4 },
+        { label:'現金', data: cashPcts,
+          borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,.55)',
+          borderWidth:1, fill:'origin', tension:.3,
+          pointRadius:pr, pointHoverRadius:4 },
       ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: {
         legend:{ display:true, position:'bottom',
-          labels:{ color:'#6b7280', font:{family:"'DM Mono','Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif",size:10}, boxWidth:10, padding:14 }
+          labels:{ color:'#6b7280', font:{family:JA_FONT,size:10}, boxWidth:10, padding:14 }
         },
         tooltip:{ ...CTOOLTIP,
-          callbacks:{ label: c=>' '+c.dataset.label+': '+c.parsed.y.toFixed(1)+'%' }
+          callbacks:{ label: c => {
+            const e = es[c.dataIndex];
+            const pct = c.dataset.label==='現金'  ? e.cash/e.total*100
+                      : c.dataset.label==='株式'  ? e.stock/e.total*100
+                      : e.trust/e.total*100;
+            return ' '+c.dataset.label+': '+pct.toFixed(1)+'%';
+          }}
         }
       },
       scales: {
         x:{ grid:CGRID, ticks:{...CTICK, maxTicksLimit:10} },
-        y:{ grid:CGRID, min:0, max:100,
-          ticks:{...CTICK, callback:v=>v+'%'}
-        }
+        y:{ grid:CGRID, min:0, max:100, ticks:{...CTICK, callback:v=>v+'%'} }
       }
     }
   });
@@ -1598,6 +1608,27 @@ function fmtPct(a, b) {
   return ((a - b) / b * 100).toFixed(1) + '%';
 }
 
+function getHoldingsAt(date) {
+  // date以前で最新のholdingsスナップショットを返す
+  const candidates = HISTORY.filter(h => h.snapshotDate <= date && h.holdings?.length > 0);
+  if (!candidates.length) return [];
+  const snap = candidates[candidates.length - 1];
+  const map = new Map();
+  snap.holdings.forEach(h => { map.set(h.name, (map.get(h.name)||0) + h.value); });
+  return [...map.entries()].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+}
+
+function holdingsSummaryText(total, date) {
+  const holdings = date ? getHoldingsAt(date) : getAggregatedHoldings();
+  if (!holdings.length) return '';
+  let s = '\n■銘柄構成比（総資産比・上位10件）\n';
+  holdings.slice(0,10).forEach(h => {
+    const pct = (h.value/total*100).toFixed(2);
+    s += `${h.name.padEnd(24)} ${pct}%\n`;
+  });
+  return s;
+}
+
 function genClaude(mode) {
   const es = entries();
   if (!es.length) { return; }
@@ -1622,6 +1653,7 @@ function genClaude(mode) {
       const tgPct = cur.trustCost ? (cur.trustGain / cur.trustCost * 100).toFixed(1) : '—';
       out += `\n含み益: 株式 +${fmtMan(cur.stockGain)} (+${sgPct}%) ／ 投信 +${fmtMan(cur.trustGain)} (+${tgPct}%)\n`;
     }
+    out += holdingsSummaryText(cur.total, cur.date);
     document.getElementById('cl-weekly').value = out;
 
   } else if (mode === 'monthly') {
@@ -1652,6 +1684,8 @@ function genClaude(mode) {
         out += `  ${mo.ym}: 収入 +${fmtMan(mo.tx.totalIncome)} ／ 支出 ▲${fmtMan(mo.tx.totalExpense)} ／ 収支 ${mo.tx.balance >= 0 ? '+' : '▲'}${fmtMan(Math.abs(mo.tx.balance))}\n`;
       });
     }
+    const curEntry = entries().slice(-1)[0];
+    if (curEntry) out += holdingsSummaryText(curEntry.total, m.ym + '-31');
     document.getElementById('cl-monthly').value = out;
 
   } else if (mode === 'trend') {
@@ -1680,6 +1714,7 @@ function genClaude(mode) {
       out += `\n期間増加: ${fmtMan(first.total)} → ${fmtMan(last.total)}`;
       out += ` (+${fmtMan(growthAmt)} / +${growthPct})\n`;
     }
+    out += holdingsSummaryText(last.total, last.date);
     document.getElementById('cl-trend').value = out;
 
   } else if (mode === 'snapshot') {
