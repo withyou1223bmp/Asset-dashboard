@@ -601,7 +601,13 @@ async function ghSaveHistory() {
     const content = btoa(binary);
     const body = { message:'update history', content };
     if (GH_HISTORY_SHA) body.sha = GH_HISTORY_SHA;
-    const res = await fetch(ghUrlHistory(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    let res = await fetch(ghUrlHistory(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    if (res.status === 409) {
+      const cur = await fetch(ghUrlHistory(), { headers: ghHeaders() });
+      if (cur.ok) { const j = await cur.json(); GH_HISTORY_SHA = j.sha; }
+      body.sha = GH_HISTORY_SHA;
+      res = await fetch(ghUrlHistory(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    }
     if (!res.ok) throw new Error(res.status);
     const json2 = await res.json();
     GH_HISTORY_SHA = json2.content.sha;
@@ -675,7 +681,14 @@ async function ghSave() {
     const content = btoa(binary);
     const body = { message:'update data', content };
     if (GH.sha) body.sha = GH.sha;
-    const res = await fetch(ghUrl(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    let res = await fetch(ghUrl(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    if (res.status === 409) {
+      // SHA mismatch — re-fetch current SHA and retry once
+      const cur = await fetch(ghUrl(), { headers: ghHeaders() });
+      if (cur.ok) { const j = await cur.json(); GH.sha = j.sha; saveGHConfig(); }
+      body.sha = GH.sha;
+      res = await fetch(ghUrl(), { method:'PUT', headers:ghHeaders(), body:JSON.stringify(body) });
+    }
     if (!res.ok) throw new Error(res.status);
     const json2 = await res.json();
     GH.sha = json2.content.sha;
