@@ -1343,22 +1343,26 @@ function parseAsset() {
             else trustGain += gv;
           }
 
-          // value: rightmost positive yen col before gain
+          // value: rightmost yen col before gain with val > 0 (skip "0円" 前日比)
           let valueIdx = -1;
           for (let i = gainIdx - 1; i >= 0; i--) {
-            if (cols[i].match(/^[\d,]+円$/)) { valueIdx = i; break; }
+            const m = cols[i].match(/^([\d,]+)円$/);
+            if (m && parseInt(m[1].replace(/,/g,'')) > 0) { valueIdx = i; break; }
           }
 
-          // name: first col that looks like a ticker/fund name
-          const name = cols.find(c =>
-            c.length > 0 &&
-            !/^[\d,]+円?$/.test(c) &&
-            !c.includes('%') &&
-            !/^\d+株$/.test(c) &&
-            !/^\d+口$/.test(c) &&
-            !/^[-−]$/.test(c) &&
-            c !== '—'
-          );
+          // name: for code/ticker in col[0] (short all-caps/digits), use display name from col[1]
+          const isCodeOrTicker = cols[0] && /^[A-Z0-9]{1,6}$/.test(cols[0]);
+          const name = isCodeOrTicker
+            ? (cols[1] || cols[0])
+            : cols.find(c =>
+                c.length > 0 &&
+                !/^[\d,]+円?$/.test(c) &&
+                !c.includes('%') &&
+                !/^\d+株$/.test(c) &&
+                !/^\d+口$/.test(c) &&
+                !/^[-−]$/.test(c) &&
+                c !== '—'
+              );
 
           if (name && valueIdx >= 0) {
             const val = parseInt(cols[valueIdx].replace(/,/g,'').replace('円',''));
