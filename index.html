@@ -1327,30 +1327,29 @@ function parseAsset() {
 
     if (curSection === 'stock' || curSection === 'trust') {
       const cols = l.split('\t').map(s=>s.trim());
-      const yenCols = cols.map(c => c.match(/^([−\-]?[\d,]+)円$/) ? c : null).filter(Boolean);
 
       const pctIdx = cols.findIndex(c => c.includes('%') && !c.includes('円'));
       if (pctIdx > 0) {
-        // gain: rightmost yen col before %
-        let gainIdx = -1;
-        for (let i = pctIdx - 1; i >= 0; i--) {
-          if (cols[i].match(/^([−\-]?[\d,]+)円$/)) { gainIdx = i; break; }
+        // Collect indices of all yen-value columns before %
+        // Expected order from right: ..., 評価額, 前日比, 評価損益, %
+        const yenIdxs = [];
+        for (let i = 0; i < pctIdx; i++) {
+          if (cols[i].match(/^[−\-]?[\d,]+円$/)) yenIdxs.push(i);
         }
-        if (gainIdx >= 0) {
+        if (yenIdxs.length >= 1) {
+          // Last yen col = 評価損益 (gain)
+          const gainIdx = yenIdxs[yenIdxs.length - 1];
           const gv = parseInt(cols[gainIdx].replace(/,/g,'').replace('円','').replace('−','-'));
           if (!isNaN(gv)) {
             if (curSection === 'stock') stockGain += gv;
             else trustGain += gv;
           }
 
-          // value: rightmost yen col before gain with val > 0 (skip "0円" 前日比)
-          let valueIdx = -1;
-          for (let i = gainIdx - 1; i >= 0; i--) {
-            const m = cols[i].match(/^([\d,]+)円$/);
-            if (m && parseInt(m[1].replace(/,/g,'')) > 0) { valueIdx = i; break; }
-          }
+          // 評価額 = 3rd-to-last yen col (skip 前日比); fallback to 2nd-to-last if only 2
+          const vLen = yenIdxs.length;
+          const valueIdx = vLen >= 3 ? yenIdxs[vLen - 3] : (vLen >= 2 ? yenIdxs[vLen - 2] : -1);
 
-          // name: for code/ticker in col[0] (short all-caps/digits), use display name from col[1]
+          // name: for code/ticker in col[0] (short all-caps/digits), use Japanese name from col[1]
           const isCodeOrTicker = cols[0] && /^[A-Z0-9]{1,6}$/.test(cols[0]);
           const name = isCodeOrTicker
             ? (cols[1] || cols[0])
