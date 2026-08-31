@@ -473,9 +473,9 @@ tbody td:first-child{text-align:left;color:var(--dim)}
     <div class="claude-card" style="grid-column:1/-1">
       <div class="claude-card-head">
         <span class="claude-num">⑤ PORTFOLIO</span>
-        <span class="claude-title">銘柄構成比 &amp; 前回差分</span>
+        <span class="claude-title">銘柄構成比トレンド（月末12ヶ月）</span>
       </div>
-      <div class="claude-desc">銘柄別の総資産比ランキング（上位10件）と前回取込との増減。取込タブで資産を保存後に生成できます。</div>
+      <div class="claude-desc">最新月の上位10銘柄について、各月末時点の総資産比を過去12ヶ月分表示。取込タブで資産を保存後に生成できます。</div>
       <textarea class="claude-out" id="cl-portfolio" readonly placeholder="「生成」を押すとここにサマリーが表示されます" style="min-height:200px"></textarea>
       <div class="claude-actions">
         <button class="btn-gen" onclick="genClaude('portfolio')">生成</button>
@@ -1732,60 +1732,68 @@ function genClaude(mode) {
     document.getElementById('cl-snapshot').value = out;
 
   } else if (mode === 'portfolio') {
-    const holdings = getAggregatedHoldings();
-    const total = es[es.length-1].total;
+    out += '## ポートフォリオ構成比トレンド（月末・過去12ヶ月）\n\n';
 
-    out += '## ポートフォリオ構成比（銘柄別・上位10件）\n\n';
-    if (holdings.length > 0) {
-      out += '■銘柄構成比（総資産比）\n';
-      holdings.slice(0,10).forEach(h => {
-        const pct = (h.value/total*100).toFixed(2);
-        out += `${h.name.padEnd(24)} ${pct}%  (${(h.value/10000).toFixed(0)}万円)\n`;
-      });
-    } else {
-      out += '（銘柄データなし。取込タブで資産を保存してください）\n';
-    }
-
-    if (HISTORY.length >= 2) {
-      const cur = HISTORY[HISTORY.length-1];
-      const prev = HISTORY[HISTORY.length-2];
-      const curMap = new Map((cur.holdings||[]).map(h=>[h.name,h.value]));
-      const prevMap = new Map((prev.holdings||[]).map(h=>[h.name,h.value]));
-
-      out += '\n■前回との差分\n';
-      const base = [
-        {l:'総資産',    c:cur.total, p:prev.total},
-        {l:'現金',      c:cur.cash,  p:prev.cash},
-        {l:'株式',      c:cur.stock, p:prev.stock},
-        {l:'投資信託',  c:cur.trust, p:prev.trust},
-      ];
-      base.forEach(({l,c,p}) => {
-        const d = c-p, sign = d>=0?'+':'';
-        const pct = p ? (d/p*100).toFixed(1) : '0.0';
-        out += `${l.padEnd(8)} ${sign}${d.toLocaleString()}円 (${sign}${pct}%)\n`;
-      });
-
-      const allNames = new Set([...curMap.keys(), ...prevMap.keys()]);
-      const diffs = [];
-      allNames.forEach(name => {
-        const cv = curMap.get(name)||0, pv = prevMap.get(name)||0;
-        if (cv && pv) diffs.push({name, d:cv-pv, pv});
-      });
-      if (diffs.length) {
-        diffs.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
-        diffs.slice(0,5).forEach(({name,d,pv}) => {
-          const sign = d>=0?'+':'';
-          const pct = pv ? (d/pv*100).toFixed(1) : '0.0';
-          out += `${name.padEnd(12)} ${sign}${d.toLocaleString()}円 (${sign}${pct}%)\n`;
-        });
+    // 月ごとに最後のholdingsスナップを取得
+    const byMonth = new Map();
+    for (const h of HISTORY) {
+      if (!h.holdings?.length) continue;
+      const ym = h.snapshotDate.slice(0, 7);
+      if (!byMonth.has(ym) || h.snapshotDate > byMonth.get(ym).snapshotDate) {
+        byMonth.set(ym, h);
       }
-
-      const newH = [...allNames].filter(n => !prevMap.has(n) && curMap.has(n));
-      const soldH = [...allNames].filter(n => !curMap.has(n) && prevMap.has(n));
-      if (newH.length) out += `\n新規銘柄: ${newH.join(', ')}\n`;
-      if (soldH.length) out += `売却銘柄: ${soldH.join(', ')}\n`;
-      if (!newH.length && !soldH.length && curMap.size > 0) out += '\n新規・売却銘柄: なし\n';
     }
+
+    const months = [...byMonth.keys()].sort().slice(-12);
+    if (!months.length) {
+      out += '（銘柄データなし。取込タブで資産を保存してください）\n';
+      document.getElementById('cl-portfolio').value = out;
+      return;
+    }
+
+    // 月ごとのholdingsMapを事前計算
+    const monthMaps = new Map();
+    months.forEach(ym => {
+      const snap = byMonth.get(ym);
+      monthMaps.set(ym, new Map((snap.holdings||[]).map(h=>[h.name,h.value])));
+    });
+
+    // 各月の上位10銘柄のユニオンを行にする（最新月の値で降順ソート）
+    const unionNames = new Set();
+    months.forEach(ym => {
+      const top10 = [...monthMaps.get(ym).entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([n])=>n);
+      top10.forEach(n => unionNames.add(n));
+    });
+    const latestMap = monthMaps.get(months[months.length-1]);
+    const sortedNames = [...unionNames].sort((a,b)=>((latestMap.get(b)||0)-(latestMap.get(a)||0)));
+
+    // ヘッダ行（月はYYYY-MMで表示）
+    const COL_W = 8;
+    const NAME_W = 20;
+    out += '銘柄'.padEnd(NAME_W);
+    months.forEach(ym => { out += ym.padStart(COL_W); });
+    out += '\n' + '─'.repeat(NAME_W + COL_W * months.length) + '\n';
+
+    // 各銘柄行
+    sortedNames.forEach(name => {
+      const label = name.length > NAME_W - 1 ? name.slice(0, NAME_W - 2) + '…' : name;
+      out += label.padEnd(NAME_W);
+      months.forEach(ym => {
+        const snap = byMonth.get(ym);
+        const val = monthMaps.get(ym).get(name) || 0;
+        const cell = val ? (val / snap.total * 100).toFixed(1) + '%' : '—';
+        out += cell.padStart(COL_W);
+      });
+      out += '\n';
+    });
+
+    // 最新月サマリー
+    const latestSnap = byMonth.get(months[months.length-1]);
+    const topSum = [...monthMaps.get(months[months.length-1]).entries()]
+      .sort((a,b)=>b[1]-a[1]).slice(0,10).reduce((s,[,v])=>s+v, 0);
+    out += '\n';
+    out += `※ ${latestSnap.snapshotDate} 時点 / 上位10合計 ${(topSum/latestSnap.total*100).toFixed(1)}% / その他 ${((latestSnap.total-topSum)/latestSnap.total*100).toFixed(1)}%\n`;
+
     document.getElementById('cl-portfolio').value = out;
   }
 }
